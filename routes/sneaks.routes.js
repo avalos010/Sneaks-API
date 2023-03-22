@@ -73,8 +73,8 @@ module.exports = (app) => {
     });
   });
 
-  //redirects root route to home page
+  //redirects root route to popular
   app.get("/", function (req, res) {
-    res.redirect("/home");
+    res.redirect("/popular");
   });
 };
