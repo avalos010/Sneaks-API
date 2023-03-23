@@ -1,6 +1,8 @@
-const SneaksAPI = require("../controllers/sneaks.controllers.js");
+import SneaksAPI from "../controllers/sneaks.controllers.js";
+
 const sneaks = new SneaksAPI();
-module.exports = (app) => {
+
+const routes = (app) => {
   app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
     res.header(
@@ -78,3 +80,5 @@ module.exports = (app) => {
     res.redirect("/popular");
   });
 };
+
+export default routes;

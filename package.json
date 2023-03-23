@@ -3,6 +3,7 @@
   "version": "1.2.1",
   "description": "A RESTful API that collects and returns data on sneakers. This API will also find, compare and return a link of where to buy the sneaker based on the price.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
