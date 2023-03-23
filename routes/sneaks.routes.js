@@ -42,11 +42,11 @@ const routes = (app) => {
   app.get("/popular", function (req, res) {
     const count = req.query.count || 40; // if the user doesn't provide the query param, it defaults to 40
     sneaks.getMostPopular(count, function (error, products) {
-      if (error) {
-        console.log(error);
-        res.send("Product Not Found");
-      } else {
+      try {
         res.json(products);
+      } catch (error) {
+        // console.error(error);
+        res.json({ error: "Product Not Found" });
       }
     });
   });
@@ -57,7 +57,7 @@ const routes = (app) => {
     sneaks.getProducts(req.params.shoe, count, function (error, products) {
       if (error) {
         console.log(error);
-        res.send("Product Not Found");
+        res.json({ error: "Product Not Found" });
       } else {
         res.json(products);
       }

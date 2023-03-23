@@ -11,6 +11,8 @@ const options = {
   },
 };
 
+//TODO!:Not WORKING FIX or work around!
+
 const stadiumGoodsScraper = {
   getLink: async function (shoe, callback) {
     try {

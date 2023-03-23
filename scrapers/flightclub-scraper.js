@@ -1,6 +1,8 @@
 import request from "request";
 import got from "got";
 
+//TODO!:Not WORKING FIX or work around!
+
 const flightClubScraper = {
   getLink: async function (shoe, callback) {
     var options = {

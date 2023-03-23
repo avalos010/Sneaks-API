@@ -50,7 +50,7 @@ const stockXScraper = {
         if (json.hits[i].lowest_ask) {
           shoe.lowestResellPrice.stockX = json.hits[i].lowest_ask;
         }
-        products.push(shoe);
+        products = [...products, shoe];
       }
 
       if (products.length == 0 || numOfShoes == 0) {
