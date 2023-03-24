@@ -3,10 +3,11 @@
   "version": "1.2.1",
   "description": "A RESTful API that collects and returns data on sneakers. This API will also find, compare and return a link of where to buy the sneaker based on the price.",
   "main": "index.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "./node_modules/.bin/netlify-lambda serve src",
+    "build": "./node_modules/.bin/netlify-lambda build src"
   },
   "repository": {
     "type": "git",
@@ -34,9 +35,17 @@
     "core-util-is": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
-    "express": "^4.17.1",
+    "express": "^4.18.2",
     "got": "^11.6.0",
     "mongoose": "^5.10.3",
-    "request": "^2.65.0"
+    "netlify-lambda": "^2.0.16",
+    "request": "^2.65.0",
+    "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.21.3",
+    "@babel/preset-env": "^7.20.2",
+    "babel-loader": "^9.1.2",
+    "webpack": "^5.76.3"
   }
 }

@@ -1,5 +1,5 @@
 import got from "got";
-import Sneaker from "../models/Sneaker.js";
+import Sneaker from "../models/Sneaker.mjs";
 
 const stockXScraper = {
   getProductsAndInfo: async function (key, count, callback) {

@@ -1,39 +1,10 @@
 // import Sneaker from "../models/Sneaker";
-import stockXScraper from "../scrapers/stockx-scraper.js";
-import flightClubScraper from "../scrapers/flightclub-scraper.js";
-import goatScraper from "../scrapers/goat-scraper.js";
-import stadiumGoodsScraper from "../scrapers/stadiumgoods-scraper.js";
+import stockXScraper from "../scrapers/stockx-scraper.mjs";
+import flightClubScraper from "../scrapers/flightclub-scraper.mjs";
+import goatScraper from "../scrapers/goat-scraper.mjs";
+import stadiumGoodsScraper from "../scrapers/stadiumgoods-scraper.mjs";
 
 class SneaksAPI {
-  /* findOne (shoeID, callback) {
-     Sneaker.findOne({
-       styleID: shoeID
-     }, function (err, shoe) {
-       if (err) {
-         console.log(err);
-         callback(err, null);
-       }
-       callback(null, shoe)
-     });
-   };*/
-
-  /*exports.create = async function (req, res) {
-    if (!req.params) {
-      return res.status(400).send({
-        message: "Shoe parameters can not be empty"
-      });
-    }
-    getProducts(req.params.shoe, function (error, products) {
-      if (error) {
-
-        console.log(error)
-        res.send("Product Not Found");
-      } else {
-        res.json(products);
-      }
-    });
-  };*/
-
   async getProducts(keyword, count = 40, callback) {
     var productCounter = 0;
     stockXScraper.getProductsAndInfo(
