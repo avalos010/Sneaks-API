@@ -1,8 +1,6 @@
-
+[Live Serverless link](https://serverless-netlify--snazzy-empanada-ab1114.netlify.app/.netlify/functions/api/)
 <p align="center">
-  
 <img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/Sneaks_Logo.png?raw=true" width=250>
-  
   </p>
   
 <p align="center">
