@@ -1,4 +1,3 @@
-[Live Serverless link](https://serverless-netlify--snazzy-empanada-ab1114.netlify.app/.netlify/functions/api/)
 <p align="center">
 <img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/Sneaks_Logo.png?raw=true" width=250>
   </p>
@@ -49,39 +48,14 @@ I built this API so sneaker heads and developers are able to create sneaker base
   - Got
   - Request
   - Mongoose
+  - Serverless-http
+  - Netlify lambda
   
 
   
 ## Installation
-To use this API you will need to have [node.js](https://nodejs.org/en/) installed.
-Once installed, use this line on the terminal within your Node.js project directory
-```
-npm install sneaks-api
-```
-and place this line at the top of your main file
-```js
-const SneaksAPI = require('sneaks-api');
-```
-## How to Use
-```js
-const SneaksAPI = require('sneaks-api');
-const sneaks = new SneaksAPI();
+[Live Serverless link](https://serverless-netlify--snazzy-empanada-ab1114.netlify.app/.netlify/functions/api/)
 
-//getProducts(keyword, limit, callback) takes in a keyword and limit and returns a product array 
-sneaks.getProducts("Yeezy Cinder", 10, function(err, products){
-    console.log(products)
-})
-
-//Product object includes styleID where you input it in the getProductPrices function
-//getProductPrices(styleID, callback) takes in a style ID and returns sneaker info including a price map and more images of the product
-sneaks.getProductPrices("FY2903", function(err, product){
-    console.log(product)
-})
-//getMostPopular(limit, callback) takes in a limit and returns an array of the current popular products curated by StockX
-sneaks.getMostPopular(10, function(err, products){
-    console.log(products)
-})
-```
-[Console log](https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/exampleSearchScreenshot%231.png) of sneaks.getProducts("Yeezy Cinder", ...)           
-[Console log](https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/exampleSearchScreenshot%232.png) of sneaks.getProductPrices("FY2903", ...)
-
+## Notes
+I (Avalos010) just made this serverless for one of my personal apps all credit should go to the original repo owner.
+Feel free to use this API it is already up!
