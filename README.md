@@ -70,7 +70,7 @@ curl 'http://localhost:4000/.netlify/functions/api/search/Yeezy%20Cinder?count=2
 curl 'http://localhost:4000/.netlify/functions/api/id/FY2903/prices'
 ```
 
-On Netlify, use `/.netlify/functions/api` as the base path.
+On Netlify, use `/.netlify/functions/api` as the base path. The deployment also rewrites clean paths such as `/popular` and `/search/Jordan` to the function; the forced rewrite is necessary because the published `dist/` directory contains an empty `index.html`.
 
 | Status | Meaning |
 | --- | --- |
