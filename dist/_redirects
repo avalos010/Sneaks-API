@@ -1,0 +1,4 @@
+/ /.netlify/functions/api/ 200!
+/popular /.netlify/functions/api/popular 200!
+/search/* /.netlify/functions/api/search/:splat 200!
+/id/* /.netlify/functions/api/id/:splat 200!
