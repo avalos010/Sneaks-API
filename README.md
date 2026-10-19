@@ -1,81 +1,113 @@
-
 <p align="center">
-  
-<img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/Sneaks_Logo.png?raw=true" width=250>
-  
-  </p>
-  
-<p align="center">
-  
-   <a href="https://www.npmjs.com/package/sneaks-api" alt="Version">
-        <img src="https://img.shields.io/npm/v/sneaks-api" /></a>
-<a href="https://www.npmjs.com/package/sneaks-api" alt="Downloads">
-        <img src="https://img.shields.io/npm/dt/sneaks-api " /></a>
+  <img src="Screenshots/Sneaks_Logo.png" alt="Sneaks API" width="250">
+</p>
 
+# Sneaks API
 
- </p>
+[![CI](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml/badge.svg?branch=chore%2Ftypescript-dependency-upgrade)](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml)
+![Node.js 22.12+](https://img.shields.io/badge/node-%3E%3D22.12-green)
+![Strict TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
 
-A StockX API, FlightClub API, Goat API, and Stadium Goods API all in one.
+Search sneakers and compare available size prices from **GOAT, Flight Club, Stadium Goods, and StockX**. Run it as a local HTTP API, import the library, or deploy the HTTP integrations with Netlify.
 
-Sneaks API is a sneaker API built with TypeScript, Node.js, Express, and Got. It searches the GOAT storefront catalog and collects publicly available prices from GOAT, Flight Club, Stadium Goods, and StockX. No developer account or private API key is required. Product data can include:
+This fork uses strict TypeScript and native ES modules, preserves the callback API, and adds Promise-based methods. It reads public storefront data without requiring developer accounts or private API keys. StockX can render pages in a separate Chrome session when ordinary HTTP requests are blocked.
 
-  - Sneaker Name
-  - Colorway
-  - Description
-  - Release Date
-  - Retail Price
-  - Style ID
-  - Image Links
-  - Product links from each of the resell sites
-  - Price map (of shoe size to price) from each of the resell sites
-  - And more
-  
-  
-  
+## What has changed
 
-I built this API so sneaker heads and developers are able to create sneaker based programs, trackers and websites without having to fumble with scrapping information on all 4 resell websites. Feel free to fork, edit and submit a pull request for this API for any changes or improvements. If you have any questions or issues regarding this feel free to create an issue and I will try to answer them as soon as I can.
+- Converted application code to strict TypeScript, with lint rules rejecting explicit `any` and type-check suppression comments.
+- Updated dependencies and replaced the Babel, webpack, Netlify Lambda, and deprecated `request` tooling.
+- Restored public provider integrations, including actual size prices and product images.
+- Added `providerErrors` so a failed enrichment does not hide the prices returned by other retailers.
+- Added CI on Node.js 22 and 24, live provider checks, and a command to enable required checks before merging.
 
-## Demo
-### Sneaks App - [Github](https://github.com/druv5319/sneaks-app)
-<img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/demo.gif" width=700 >
+## Quick start
 
-### [Twilio Blog Tutorial](https://www.twilio.com/blog/build-price-tracker-twilio-programmable-sms-node): Build a Sneaker Price Tracker with Twilio Programmable SMS
-  <img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/euCdtWvMESTjo9_Smd_wRpoNvhk6XOr3n3QlnHYNRAHHU.width-1000_RWrysBn-2.png" width="350"> <img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/syHg2FzA1dcFjpp6XlqNq_ZRNDXJPcdWCJzGhBcU2PPXv.width-1000_VZzgt9G.png" width="350">
+Use **Node.js 22.12 or newer** and npm. A MongoDB connection is not required. Install Google Chrome if you want StockX's browser fallback.
 
-
-## Installation
-
-Use Node.js 22.12 or newer. This branch migrates the project to strict TypeScript and native ES modules. The build includes TypeScript declarations at `build/index.d.ts`.
+The current migration is on `chore/typescript-dependency-upgrade`:
 
 ```sh
-npm install sneaks-api
+git clone --branch chore/typescript-dependency-upgrade https://github.com/avalos010/Sneaks-API.git
+cd Sneaks-API
+npm ci
+npm run dev
 ```
 
-## How to Use
+The server starts at **http://localhost:4000** with hot reload. Try:
 
-All three methods support Promises:
+```sh
+curl 'http://localhost:4000/popular?count=2'
+curl 'http://localhost:4000/search/Jordan?count=2'
+curl 'http://localhost:4000/id/AV5354-611/prices'
+```
+
+These instructions describe this repository's TypeScript implementation. Use this checkout to try the updates; installing the public `sneaks-api` npm package may give you a different release.
+
+For a compiled server:
+
+```sh
+npm run build
+npm start
+```
+
+Importing the library does not start an HTTP server.
+
+## HTTP endpoints
+
+| Method | Local path | Returns |
+| --- | --- | --- |
+| GET | `/` | `Hello World` |
+| GET | `/popular` | Products in the GOAT catalog's default ranking |
+| GET | `/search/:shoe` | Products matching a URL-encoded keyword |
+| GET | `/id/:id/prices` | An exact style-ID match with available retailer prices and images |
+
+Popular and search requests accept `count`, which defaults to **40** and must be an integer from **1 to 100**. Results can contain fewer products when fewer valid matches are available. Style IDs with supplier spaces are normalized to hyphens.
+
+The local server also accepts the Netlify function prefix:
+
+```sh
+curl 'http://localhost:4000/.netlify/functions/api/search/Yeezy%20Cinder?count=2'
+curl 'http://localhost:4000/.netlify/functions/api/id/FY2903/prices'
+```
+
+On Netlify, use `/.netlify/functions/api` as the base path.
+
+| Status | Meaning |
+| --- | --- |
+| `200` | Successful request; an empty search result is `[]` |
+| `400` | Invalid `count` |
+| `404` | No exact style match for a price lookup, or an unknown route |
+| `502` | The primary catalog could not return products |
+
+A price request can return `200` with partial retailer data. Inspect `providerErrors` alongside each price map.
+
+## Library usage
+
+Build this checkout before importing it. To use it in another local project, run `npm install /absolute/path/to/Sneaks-API` from that project's directory after building.
+
+### Promises and TypeScript
 
 ```ts
-import SneaksAPI from 'sneaks-api';
+import SneaksAPI, { type SneakerDocument } from 'sneaks-api';
 
 const sneaks = new SneaksAPI();
 
-try {
-    const products = await sneaks.getProducts('Yeezy Cinder', 10);
-    console.log(products);
+const products: SneakerDocument[] = await sneaks.getProducts('Yeezy Cinder', 10);
+const popular = await sneaks.getMostPopular(10);
+const shoe = await sneaks.getProductPrices('AV5354-611');
 
-    // Use a product's styleID to retrieve its prices and additional details.
-    const product = await sneaks.getProductPrices('FY2903');
-    console.log(product);
-
-    const popular = await sneaks.getMostPopular(10);
-    console.log(popular);
-} catch (error) {
-    console.error(error);
-}
+console.log(products, popular);
+console.log(shoe.resellLinks);
+console.log(shoe.resellPrices.goat);
+console.log(shoe.resellPrices.flightClub);
+console.log(shoe.resellPrices.stadiumGoods);
+console.log(shoe.resellPrices.stockX);
+console.log(shoe.providerErrors);
 ```
 
-Callback usage is also supported:
+The build exports declarations from `build/index.d.ts`, including `SneakerData`, `SneakerDocument`, `Retailer`, `PriceMap`, `ProviderError`, and `SneaksCallback`.
+
+### Callbacks
 
 ```ts
 import SneaksAPI from 'sneaks-api';
@@ -83,131 +115,115 @@ import SneaksAPI from 'sneaks-api';
 const sneaks = new SneaksAPI();
 
 sneaks.getProducts('Yeezy Cinder', 10, (error, products) => {
-    if (error) {
-        console.error(error);
-        return;
-    }
-    console.log(products);
+  if (error) {
+    console.error(error);
+    return;
+  }
+  console.log(products);
 });
 
-sneaks.getProductPrices('FY2903', (error, product) => {
-    if (error) {
-        console.error(error);
-        return;
-    }
-    console.log(product);
-});
-
-sneaks.getMostPopular(10, (error, products) => {
-    if (error) {
-        console.error(error);
-        return;
-    }
-    console.log(products);
+sneaks.getProductPrices('FY2903', (error, shoe) => {
+  if (error) {
+    console.error(error);
+    return;
+  }
+  console.log(shoe);
 });
 ```
 
-For a CommonJS application, replace `require('sneaks-api')` with dynamic import inside an async function:
+`getMostPopular(count, callback)` is also supported. CommonJS applications can use dynamic import inside an async function:
 
 ```js
 async function main() {
-    const { default: SneaksAPI } = await import('sneaks-api');
-    const sneaks = new SneaksAPI();
-    console.log(await sneaks.getMostPopular(10));
+  const { default: SneaksAPI } = await import('sneaks-api');
+  const sneaks = new SneaksAPI();
+  console.log(await sneaks.getMostPopular(2));
 }
 
 main().catch(console.error);
 ```
 
-[Console log](https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/exampleSearchScreenshot%231.png) of sneaks.getProducts("Yeezy Cinder", ...)           
-[Console log](https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/exampleSearchScreenshot%232.png) of sneaks.getProductPrices("FY2903", ...)
+## Product data and provider availability
 
-## Local Development
+Products can include a name, brand, style ID, colorway, retail price, release date, description, thumbnail, images, retailer links, lowest prices, and size-to-price maps. Prices are returned in **USD** when the source provides USD offers. Missing prices are not represented as zero.
 
-Use npm for dependency installation; `package-lock.json` is the sole lockfile.
-
-```sh
-npm ci
-npm run dev
-```
-
-The development server listens on port 4000. To check and build the project:
-
-```sh
-npm run typecheck
-npm run lint
-npm test
-npm run build
-npm start
-```
-
-`npm start` runs the built local server, so run `npm run build` first. Importing the library does not start a server.
-
-Run `npm run check` for lint, typecheck, tests, and build together. TypeScript strict mode rejects implicit `any`; lint rejects explicit `any` and comments that suppress type checking.
-
-With the server running, use `npm run test:live` to exercise both route prefixes, catalog results, actual GOAT and Flight Club size prices, and validation. Set `API_BASE_URL` to test another running instance.
-
-Use `REQUIRE_STOCKX=1 npm run test:live` to require real StockX size prices as well. StockX's browser fallback needs Google Chrome installed and a graphical desktop session. It opens its own temporary Chrome profile, reuses it briefly, and closes it after 30 seconds without requests. It does not use your personal Chrome profile or require a StockX login. Set `STOCKX_CHROME_PATH` (or `CHROME_BIN`) if Chrome is installed somewhere other than a standard location.
-
-## HTTP API and Netlify
-
-The local server and Netlify function expose these routes:
-
-| Method | Path | Description |
+| Provider | Current source | Browser required? |
 | --- | --- | --- |
-| GET | `/.netlify/functions/api/popular` | Popular products |
-| GET | `/.netlify/functions/api/search/:shoe` | Search by a URL-encoded sneaker keyword |
-| GET | `/.netlify/functions/api/id/:id/prices` | Product details and prices for a style ID |
+| GOAT | Public storefront catalog, index `product_variants_v2` | No |
+| Flight Club | Public storefront catalog, index `product_variants_v2_flight_club` | No |
+| Stadium Goods | Shopify `/search/suggest.json` and `/products/{handle}.js` | No |
+| StockX | Public search/product pages, visible style details, and embedded Product JSON-LD offers | Sometimes; Chrome fallback |
 
-The popular and search routes accept a `count` query parameter. It defaults to 40 and must be an integer from 1 to 100. For example:
+GOAT and Flight Club use `POST https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries`. Stadium Goods uses `https://www.stadiumgoods.com`; StockX uses `https://stockx.com`.
 
-```sh
-curl 'http://localhost:4000/.netlify/functions/api/search/Yeezy%20Cinder?count=10'
-```
+Search and popular products depend on the GOAT catalog. Other provider enrichments are optional: if one fails, successful data remains available and `providerErrors` records its `provider`, `operation`, and `message`. A retailer with no matching product or no available inventory can have an empty price map without an error.
 
-Netlify builds the TypeScript function from `src/api.ts` using its native TypeScript support and the esbuild function bundler configured in `netlify.toml`. This replaces the previous netlify-lambda, Babel, and webpack workflow.
+Public storefronts can change their markup, inventory, or access rules. Passing mocked tests verifies the code; live checks verify current responses from selected products.
 
-## CI and deployment checks
+### StockX and Chrome
 
-The **CI** workflow runs on every push, pull request, and merge-queue update. It validates Node.js 22 and 24 with lint (including the no-`any` rule), strict typechecking, mocked provider tests, compilation, a built-library/serverless-handler smoke check, and npm package validation. Its final **Required checks** status succeeds only when both Node versions pass. Dependabot checks the pinned GitHub Actions versions weekly.
+StockX first attempts ordinary HTTP, then renders the public page in Chrome if access is blocked or product data is incomplete. The fallback uses its own temporary profile, never your personal Chrome profile, and does not require a StockX login. Requests share that session briefly; it closes after **30 seconds** without requests.
 
-Netlify runs `npm run check` before deploying through the build command in `netlify.toml`. This validates the code before deployment; production live checks are separate.
+The working browser mode uses **visible Chrome and a graphical desktop session**. Headless Chrome was blocked during verification. Server deployments need Chrome and a compatible display or a separate browser worker. Standard Netlify Functions do not provide this browser environment; the other three providers can still return data there.
 
-The **Live providers** workflow checks real catalog results and GOAT, Flight Club, and Stadium Goods size prices daily at **11:23 UTC**. Run it manually from GitHub Actions to check sooner. Its optional **StockX browser** input also runs the complete live suite with visible Chrome on a macOS runner. StockX may block hosted-runner traffic even when local scraping works; logs are retained for seven days. Live checks use known product fixtures, whose availability can also change. They are separate from the deterministic merge gate.
+## Configuration
 
-Scheduled runs and the manual workflow button become available after the workflow is merged into the repository's default branch. The built server is started and stopped automatically by each live-check job.
+Server settings can come from environment variables or a local `.env` file. Pass live-test flags in the environment when running the test command.
 
-### Require passing checks before merging
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PORT` | Local HTTP server port | `4000` |
+| `STOCKX_CHROME_PATH` | Chrome executable for StockX scraping | Detect a standard installation |
+| `CHROME_BIN` | Alternative Chrome executable setting | Used when `STOCKX_CHROME_PATH` is unset |
+| `API_BASE_URL` | Running server used by live tests | `http://localhost:4000` |
+| `REQUIRE_STOCKX` | Set to `1` to require StockX size prices in live tests | StockX prices are optional in the default live suite |
 
-Adding a workflow does not itself block merges. After pushing the workflow, an administrator can enable the **Require CI before merging** ruleset on the default branch:
+## Tests and local checks
+
+| Command | Checks |
+| --- | --- |
+| `npm run lint` | Lint, no explicit `any`, and no type-check suppressions |
+| `npm run typecheck` | Strict TypeScript compilation checks |
+| `npm test` | Provider parsers, callbacks, promises, routes, and browser lifecycle behavior using mocks |
+| `npm run build` | Compiled JavaScript, declarations, and source maps |
+| `npm run check` | Lint, typecheck, tests, and build together |
+| `npm run test:live` | Real catalog results, GOAT/Flight Club/Stadium Goods size prices, both route prefixes, and validation |
+| `REQUIRE_STOCKX=1 npm run test:live` | The live suite with required StockX size prices too |
+
+Start the server before running live tests. They use known product fixtures, whose inventory can change.
+
+## CI, deployment, and merging
+
+The [CI workflow](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml) runs on every push, pull request, and merge-queue update. It checks Node.js **22 and 24**, including lint, strict types, mocked tests, build output, the built serverless handler, and npm package contents. Its **Required checks** status passes only when both versions succeed. Dependabot checks the pinned GitHub Actions versions weekly.
+
+Netlify runs `npm run check` before deploying, as configured in [netlify.toml](netlify.toml).
+
+The **Live providers** workflow checks GOAT, Flight Club, and Stadium Goods daily at **11:23 UTC**. It can also run manually, with an optional **StockX browser** check on macOS. Hosted-runner traffic may be blocked even when local scraping works. Logs are retained for seven days.
+
+Scheduled runs and the manual workflow button become available once the workflow is merged into the default branch. The live jobs start and stop their own server. Live provider checks are separate from the deterministic merge checks.
+
+### Enable required checks before merging
+
+Workflows alone do not block merges. A repository administrator can enable the **Require CI before merging** ruleset:
 
 ```sh
 gh auth login
 npm run ci:protect
 ```
 
-The command requires repository administration access. It creates or updates only its own named ruleset, leaving other rulesets intact. The rule requires the **Required checks** status to pass on an up-to-date commit. Preview the exact configuration without changing GitHub:
+The command creates or updates only its named ruleset on the default branch, preserving other rulesets. It requires **Required checks** to pass on an up-to-date commit. Preview the configuration without changing GitHub:
 
 ```sh
 npm run ci:protect -- --dry-run --repo avalos010/Sneaks-API
 ```
 
-Alternatively, use GitHub **Settings → Rules → Rulesets** to require the same status check for the default branch.
+Alternatively, configure the same required status in **Settings → Rules → Rulesets** on GitHub.
 
-## Data Availability
+## Original demo and credits
 
-Search and popular products use the GOAT storefront catalog. Popular products follow the catalog's default ranking. GOAT and Flight Club prices and images come from their storefront search records; Stadium Goods uses its Shopify storefront. The retired StockX Algolia index, GOAT web API, Flight Club token/GraphQL calls, and Stadium Goods GraphQL hostname are no longer used.
+This fork builds on [druv5319/Sneaks-API](https://github.com/druv5319/Sneaks-API). The original demo and tutorial predate the TypeScript migration:
 
-| Provider | Current integration |
-| --- | --- |
-| GOAT | `POST https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries`, index `product_variants_v2` |
-| Flight Club | Same catalog URL, index `product_variants_v2_flight_club` |
-| Stadium Goods | `GET https://www.stadiumgoods.com/search/suggest.json` and `GET /products/{handle}.js` |
-| StockX | Public search/product pages at `https://stockx.com`, with embedded product data when the site permits access |
+- [Sneaks App](https://github.com/druv5319/sneaks-app)
+- [Twilio tutorial: build a sneaker price tracker](https://www.twilio.com/blog/build-price-tracker-twilio-programmable-sms-node)
 
-StockX uses ordinary HTTP when the returned page contains complete product data, then renders the public page in Chrome when necessary. The browser transport currently uses visible Chrome: headless Chrome was blocked during live verification. A server deployment needs a compatible Chrome installation and graphical display or a separate browser worker; standard Netlify Functions do not provide these. The other three providers use HTTP and continue to work when the StockX browser is unavailable.
-
-Provider failures are reported in the product's `providerErrors` array, rather than represented as zero prices. The other providers continue to return data when one provider blocks a request. A provider with no matching product or no available sizes can have an empty price map.
-
-Storefront endpoints can change their responses or block requests. Automated tests use mocked responses to check parsing and error handling; live smoke tests verify the currently reachable integrations.
-
+<img src="Screenshots/demo.gif" alt="Original Sneaks App demo" width="700">
