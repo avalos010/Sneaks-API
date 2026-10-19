@@ -85,7 +85,8 @@ test("prices and pictures work without StockX developer credentials", async (con
   await api.getProductPrices("ABC-123", (error, result) => {
     calls += 1;
     assert.equal(error, null);
-    assert.equal(result, shoe);
+    assert.equal(result?.styleID, shoe.styleID);
+    assert.equal(result?.resellPrices.goat?.["9"], 125);
   });
   assert.equal(calls, 1);
 });
@@ -203,7 +204,7 @@ test("missing product routes return 404 and provider failures return 502", async
   assert.equal(response.status, 404);
   assert.equal(response.body, JSON.stringify({ error: "Product Not Found" }));
   context.mock.method(goatScraper, "getProductsAndInfo", async () => { throw new Error("Upstream unavailable"); });
-  for (const path of ["/search/jordan", "/popular", "/id/ABC-123/prices"]) {
+  for (const path of ["/search/unavailable", "/popular", "/id/UNAVAILABLE/prices"]) {
     response = await request(path);
     assert.equal(response.status, 502);
     assert.match(response.body, /Unable to retrieve products from the provider/);

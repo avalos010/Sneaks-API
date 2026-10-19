@@ -3,9 +3,33 @@ import flightClubScraper from "../scrapers/flightclub-scraper.js";
 import goatScraper from "../scrapers/goat-scraper.js";
 import stadiumGoodsScraper from "../scrapers/stadiumgoods-scraper.js";
 import { normalizeStyleID } from "../scrapers/goat-catalog.js";
-import type { ProviderError, SneakerDocument } from "../models/Sneaker.js";
+import Sneaker, { type ProviderError, type SneakerDocument } from "../models/Sneaker.js";
+import { RequestCache } from "./request-cache.js";
 
 export type SneaksCallback<T> = (error: Error | null, result: T | null) => void;
+
+export interface SneaksCacheOptions {
+  enabled?: boolean;
+  searchTtlMs?: number;
+  priceTtlMs?: number;
+  /** Maximum entries in each of the catalog and product-price caches. */
+  maxEntries?: number;
+  now?: () => number;
+}
+
+export interface SneaksAPIOptions {
+  cache?: SneaksCacheOptions;
+}
+
+function numericSetting(value: unknown, fallback: number, minimum: number): number {
+  if (value === undefined || value === "") return fallback;
+  const number = typeof value === "number" || typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isSafeInteger(number) && number >= minimum ? number : fallback;
+}
+
+function cloneSneaker(shoe: SneakerDocument): SneakerDocument {
+  return new Sneaker(shoe.toObject());
+}
 
 export class ProductNotFoundError extends Error {
   constructor() {
@@ -44,6 +68,31 @@ async function enrich(shoe: SneakerDocument, operations: Enrichment[]): Promise<
 }
 
 class SneaksAPI {
+  private readonly catalogCache: RequestCache<SneakerDocument[]>;
+  private readonly priceCache: RequestCache<SneakerDocument>;
+
+  constructor(options: SneaksAPIOptions = {}) {
+    const cache = options.cache ?? {};
+    const enabled = cache.enabled ?? !/^(?:false|0|off)$/i.test(process.env.SNEAKS_CACHE_ENABLED?.trim() ?? "");
+    const maxEntries = numericSetting(cache.maxEntries ?? process.env.SNEAKS_CACHE_MAX_ENTRIES, 100, 1);
+    this.catalogCache = new RequestCache({
+      enabled,
+      maxEntries,
+      ttlMs: numericSetting(cache.searchTtlMs ?? process.env.SNEAKS_SEARCH_CACHE_TTL_MS, 60_000, 0),
+      clone: (products) => products.map(cloneSneaker),
+      isCacheable: (products) => products.every((shoe) => shoe.providerErrors.length === 0),
+      now: cache.now,
+    });
+    this.priceCache = new RequestCache({
+      enabled,
+      maxEntries,
+      ttlMs: numericSetting(cache.priceTtlMs ?? process.env.SNEAKS_PRICE_CACHE_TTL_MS, 30_000, 0),
+      clone: cloneSneaker,
+      isCacheable: (shoe) => shoe.providerErrors.length === 0,
+      now: cache.now,
+    });
+  }
+
   getProducts(keyword: string, count?: number): Promise<SneakerDocument[]>;
   getProducts(keyword: string, count: number, callback: SneaksCallback<SneakerDocument[]>): Promise<void>;
   getProducts(
@@ -51,7 +100,7 @@ class SneaksAPI {
     count = 40,
     callback?: SneaksCallback<SneakerDocument[]>,
   ): Promise<SneakerDocument[] | void> {
-    const operation = this.findProducts(keyword, count);
+    const operation = this.catalogCache.get(JSON.stringify(["search", keyword, count]), () => this.findProducts(keyword, count));
     return callback ? withCallback(operation, callback) : operation;
   }
 
@@ -61,7 +110,8 @@ class SneaksAPI {
     styleID: string,
     callback?: SneaksCallback<SneakerDocument>,
   ): Promise<SneakerDocument | void> {
-    const operation = this.findProductPrices(styleID);
+    const normalizedStyleID = normalizeStyleID(styleID);
+    const operation = this.priceCache.get(normalizedStyleID, () => this.findProductPrices(normalizedStyleID));
     return callback ? withCallback(operation, callback) : operation;
   }
 
@@ -71,7 +121,7 @@ class SneaksAPI {
     count = 40,
     callback?: SneaksCallback<SneakerDocument[]>,
   ): Promise<SneakerDocument[] | void> {
-    const operation = this.findProducts("", count);
+    const operation = this.catalogCache.get(JSON.stringify(["popular", count]), () => this.findProducts("", count));
     return callback ? withCallback(operation, callback) : operation;
   }
 
@@ -91,7 +141,7 @@ class SneaksAPI {
 
   private async findProductPrices(styleID: string): Promise<SneakerDocument> {
     const normalizedStyleID = normalizeStyleID(styleID);
-    const products = await this.findProducts(normalizedStyleID, 1);
+    const products = await this.getProducts(normalizedStyleID, 1);
     const shoe = products[0];
     if (!shoe || normalizeStyleID(shoe.styleID) !== normalizedStyleID) {
       throw new ProductNotFoundError();

@@ -4,19 +4,28 @@ import { constants, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { chromium, type Browser, type BrowserContext } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+
+type BrowserMode = "background" | "headless" | "visible";
 
 interface Session {
   child: ChildProcess;
   profile: string;
   browser: Browser;
   context: BrowserContext;
+  mode: BrowserMode;
 }
 
 let session: Session | undefined;
 let queue: Promise<void> = Promise.resolve();
 let idleTimer: NodeJS.Timeout | undefined;
 let shutdownHooksInstalled = false;
+
+function browserMode(): BrowserMode {
+  const mode = process.env.STOCKX_BROWSER_MODE ?? "background";
+  if (mode === "background" || mode === "headless" || mode === "visible") return mode;
+  throw new Error("STOCKX_BROWSER_MODE must be background, headless, or visible");
+}
 
 function cancelIdleClose(): void {
   if (idleTimer) clearTimeout(idleTimer);
@@ -27,6 +36,25 @@ function validatedURL(value: string): URL {
   const url = new URL(value);
   if (url.origin !== "https://stockx.com" || url.username || url.password) {
     throw new Error("StockX browser only accepts public https://stockx.com URLs");
+  }
+  return url;
+}
+
+function validatedGoatURL(value: string, templateId: number): URL {
+  const url = new URL(value);
+  if (url.origin !== "https://www.goat.com" || url.username || url.password
+    || !/^\/sneakers\/[^/]+$/.test(url.pathname) || url.search || url.hash
+    || !Number.isSafeInteger(templateId) || templateId <= 0) {
+    throw new Error("GOAT browser only accepts public https://www.goat.com/sneakers/ product URLs and a positive template ID");
+  }
+  return url;
+}
+
+function validatedFlightClubURL(value: string): URL {
+  const url = new URL(value);
+  if (url.origin !== "https://www.flightclub.com" || url.username || url.password
+    || !/^\/[a-z0-9][a-z0-9-]*$/.test(url.pathname) || url.search || url.hash) {
+    throw new Error("Flight Club browser only accepts public https://www.flightclub.com/ product URLs");
   }
   return url;
 }
@@ -53,7 +81,7 @@ async function chromeExecutable(): Promise<string> {
       // Continue through known installation locations, never use a user's profile.
     }
   }
-  throw new Error("StockX public pages require Chrome and a graphical display. Install Google Chrome or set STOCKX_CHROME_PATH to its executable.");
+  throw new Error("Public storefront prices require Chrome. Install Google Chrome or set STOCKX_CHROME_PATH to its executable.");
 }
 
 function childAlive(child: ChildProcess): boolean {
@@ -107,7 +135,7 @@ function installShutdownHooks(): void {
   }
 }
 
-async function startSession(): Promise<Session> {
+async function startSession(mode: BrowserMode): Promise<Session> {
   const executable = await chromeExecutable();
   const profile = await mkdtemp(path.join(tmpdir(), "sneaks-stockx-chrome-"));
   const child = spawn(executable, [
@@ -115,7 +143,7 @@ async function startSession(): Promise<Session> {
     `--user-data-dir=${profile}`,
     "--no-first-run",
     "--no-default-browser-check",
-    "about:blank",
+    ...(mode === "background" ? ["--no-startup-window"] : mode === "headless" ? ["--headless=new", "about:blank"] : ["about:blank"]),
   ], { stdio: "ignore" });
   let launchError: Error | undefined;
   child.once("error", (error: Error) => { launchError = error; });
@@ -144,23 +172,101 @@ async function startSession(): Promise<Session> {
     const context = browser.contexts()[0];
     if (!context) throw new Error("Chrome did not provide a browsing context");
     installShutdownHooks();
-    return { child, profile, browser, context };
+    return { child, profile, browser, context, mode };
   } catch (cause) {
     await browser?.close().catch(() => {});
     await stopChild(child);
     await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-    throw new Error("Could not start Chrome for StockX public pages. Chrome must be installed and a graphical display available.", { cause });
+    throw new Error(`Could not start Chrome for public storefronts in ${mode} mode. Chrome must be installed; background and visible modes also require a graphical display.`, { cause });
+  }
+}
+
+async function createPage(current: Session): Promise<Page> {
+  if (current.mode !== "background") return current.context.newPage();
+  const control = await current.browser.newBrowserCDPSession();
+  try {
+    // Create the window minimized from the start; opening a normal page first
+    // would briefly steal focus before its window state could be changed.
+    const [page] = await Promise.all([
+      current.context.waitForEvent("page", { timeout: 10_000 }),
+      control.send("Target.createTarget", {
+        url: "about:blank", newWindow: true, background: true,
+        focus: false, windowState: "minimized",
+      }),
+    ]);
+    return page;
+  } finally {
+    await control.detach().catch(() => {});
+  }
+}
+
+async function currentSession(): Promise<Session> {
+  const mode = browserMode();
+  if (!session?.browser.isConnected() || !childAlive(session.child) || session.mode !== mode) {
+    const previous = session;
+    session = undefined;
+    if (previous) await dispose(previous);
+    session = await startSession(mode);
+  }
+  return session;
+}
+
+async function readGoatPrices(url: URL, templateId: number): Promise<unknown> {
+  const page = await createPage(await currentSession());
+  try {
+    // Observe the same public price response the storefront uses. Do not use
+    // search-index quotes when the live storefront is unavailable.
+    const prices = page.waitForResponse((response) => {
+      const source = new URL(response.url());
+      return source.origin === url.origin
+        && source.pathname === "/web-api/v1/product_variants/buy_bar_data"
+        && source.searchParams.get("productTemplateId") === String(templateId)
+        && source.searchParams.get("countryCode") === "US";
+    }, { timeout: 30_000 });
+    // Attach a rejection handler immediately, even if navigation fails first.
+    const outcome = prices.then(async (response) => {
+      if (response.status() !== 200) throw new Error(`GOAT public price response returned HTTP ${response.status()}`);
+      const data: unknown = await response.json();
+      return data;
+    });
+    void outcome.catch(() => {});
+    const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    if (!response || response.status() >= 400 || new URL(page.url()).origin !== url.origin) {
+      throw new Error(`GOAT public product page failed (HTTP ${response?.status() ?? "no response"})`);
+    }
+    return await outcome;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function readFlightClubPage(url: URL): Promise<string> {
+  const page = await createPage(await currentSession());
+  try {
+    const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    if (!response || response.status() >= 400 || new URL(page.url()).origin !== url.origin) {
+      throw new Error(`Flight Club public product page failed (HTTP ${response?.status() ?? "no response"})`);
+    }
+    await page.waitForFunction(() => {
+      const data = document.querySelector("#__NEXT_DATA__")?.textContent;
+      if (!data) return false;
+      try {
+        const value: unknown = JSON.parse(data);
+        if (typeof value !== "object" || value === null || !("props" in value)) return false;
+        const props = value.props;
+        if (typeof props !== "object" || props === null || !("pageProps" in props)) return false;
+        const pageProps = props.pageProps;
+        return typeof pageProps === "object" && pageProps !== null && "productTemplate" in pageProps;
+      } catch { return false; }
+    }, undefined, { timeout: 30_000 });
+    return await page.content();
+  } finally {
+    await page.close().catch(() => {});
   }
 }
 
 async function readPage(url: URL): Promise<string> {
-  if (!session?.browser.isConnected() || !childAlive(session.child)) {
-    const previous = session;
-    session = undefined;
-    if (previous) await dispose(previous);
-    session = await startSession();
-  }
-  const page = await session.context.newPage();
+  const page = await createPage(await currentSession());
   try {
     page.setDefaultTimeout(30_000);
     const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
@@ -212,6 +318,48 @@ const stockXBrowser = {
       cancelIdleClose();
       try {
         return await readPage(url);
+      } finally {
+        idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
+        idleTimer.unref();
+      }
+    });
+    queue = operation.then(() => {}, () => {});
+    return operation;
+  },
+
+  getGoatPrices(value: string, templateId: number): Promise<unknown> {
+    let url: URL;
+    try {
+      url = validatedGoatURL(value, templateId);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    cancelIdleClose();
+    const operation = queue.then(async () => {
+      cancelIdleClose();
+      try {
+        return await readGoatPrices(url, templateId);
+      } finally {
+        idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
+        idleTimer.unref();
+      }
+    });
+    queue = operation.then(() => {}, () => {});
+    return operation;
+  },
+
+  getFlightClubPage(value: string): Promise<string> {
+    let url: URL;
+    try {
+      url = validatedFlightClubURL(value);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    cancelIdleClose();
+    const operation = queue.then(async () => {
+      cancelIdleClose();
+      try {
+        return await readFlightClubPage(url);
       } finally {
         idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
         idleTimer.unref();

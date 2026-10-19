@@ -1,5 +1,6 @@
 import type { SneakerDocument } from "../models/Sneaker.js";
-import { catalogPrices, getCatalogVariants, usd, type GoatCatalogHit } from "./goat-catalog.js";
+import { getCatalogVariants, type GoatCatalogHit } from "./goat-catalog.js";
+import { getFlightClubStorefrontPrices } from "./goat-storefront.js";
 
 const variants = new WeakMap<SneakerDocument, Promise<GoatCatalogHit[]>>();
 
@@ -21,14 +22,16 @@ const flightClubScraper = {
     if (!product) return;
     if (product.slug) shoe.resellLinks.flightClub = `https://www.flightclub.com/${encodeURIComponent(product.slug)}`;
     if (product.story) shoe.description = product.story;
-    const prices = Object.values(catalogPrices(products));
-    const price = prices.length ? Math.min(...prices) : usd(product.lowest_price_cents_usd);
-    if (price !== undefined && product.has_stock !== false) shoe.lowestResellPrice.flightClub = price;
   },
 
   async getPrices(shoe: SneakerDocument): Promise<void> {
-    if (!shoe.resellLinks.flightClub) return;
-    shoe.resellPrices.flightClub = catalogPrices(await loadVariants(shoe));
+    const link = shoe.resellLinks.flightClub;
+    if (!link) return;
+    shoe.resellPrices.flightClub = {};
+    shoe.set("lowestResellPrice.flightClub", undefined);
+    shoe.resellPrices.flightClub = await getFlightClubStorefrontPrices(link, shoe.styleID);
+    const prices = Object.values(shoe.resellPrices.flightClub);
+    if (prices.length) shoe.lowestResellPrice.flightClub = Math.min(...prices);
   },
 };
 

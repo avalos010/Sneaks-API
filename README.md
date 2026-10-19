@@ -10,7 +10,7 @@
 
 Search sneakers and compare available size prices from **GOAT, Flight Club, Stadium Goods, and StockX**. Run it as a local HTTP API, import the library, or deploy the HTTP integrations with Netlify.
 
-This fork uses strict TypeScript and native ES modules, preserves the callback API, and adds Promise-based methods. It reads public storefront data without requiring developer accounts or private API keys. StockX can render pages in a separate Chrome session when ordinary HTTP requests are blocked.
+This fork uses strict TypeScript and native ES modules, preserves the callback API, and adds Promise-based methods. It reads public storefront data without requiring developer accounts or private API keys. Price lookups can render pages in a separate Chrome session when ordinary HTTP requests are blocked.
 
 ## What has changed
 
@@ -22,7 +22,7 @@ This fork uses strict TypeScript and native ES modules, preserves the callback A
 
 ## Quick start
 
-Use **Node.js 22.12 or newer** and npm. A MongoDB connection is not required. Install Google Chrome if you want StockX's browser fallback.
+Use **Node.js 22.12 or newer** and npm. A MongoDB connection is not required. Install Google Chrome for the storefront price fallbacks.
 
 Clone the repository's default branch:
 
@@ -147,24 +147,32 @@ main().catch(console.error);
 
 Products can include a name, brand, style ID, colorway, retail price, release date, description, thumbnail, images, retailer links, lowest prices, and size-to-price maps. Prices are returned in **USD** when the source provides USD offers. Missing prices are not represented as zero.
 
+GOAT and Flight Club prices match the US storefront's **new, no defects, good original box** options, with standard shipping speed. Their search indexes supply product metadata and links, not current price quotes. Use `/id/:id/prices` for size prices. Sizes use each product's native US sizing (for example, US women's sizes for a women's product). Prices are listing amounts; shipping, taxes, and separately displayed marketplace fees can increase the checkout total. StockX, for example, displays its marketplace fee separately from the Buy Now amount.
+
 | Provider | Current source | Browser required? |
 | --- | --- | --- |
-| GOAT | Public storefront catalog, index `product_variants_v2` | No |
-| Flight Club | Public storefront catalog, index `product_variants_v2_flight_club` | No |
+| GOAT | Public catalog for discovery; current US product buy-bar data for prices | Sometimes; Chrome fallback for prices |
+| Flight Club | Public catalog for discovery; product page's regional size offers for prices | Sometimes; Chrome fallback for prices |
 | Stadium Goods | Shopify `/search/suggest.json` and `/products/{handle}.js` | No |
 | StockX | Public search/product pages, visible style details, and embedded Product JSON-LD offers | Sometimes; Chrome fallback |
 
-GOAT and Flight Club use `POST https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries`. Stadium Goods uses `https://www.stadiumgoods.com`; StockX uses `https://stockx.com`.
+GOAT and Flight Club discovery uses `POST https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries` (indexes `product_variants_v2` and `product_variants_v2_flight_club`). GOAT prices use the public storefront's `/web-api/v1/product_variants/buy_bar_data` response with `countryCode=US`. Flight Club prices come from its public product page. Stadium Goods uses `https://www.stadiumgoods.com`; StockX uses `https://stockx.com`.
 
 Search and popular products depend on the GOAT catalog. Other provider enrichments are optional: if one fails, successful data remains available and `providerErrors` records its `provider`, `operation`, and `message`. A retailer with no matching product or no available inventory can have an empty price map without an error.
 
 Public storefronts can change their markup, inventory, or access rules. Passing mocked tests verifies the code; live checks verify current responses from selected products.
 
-### StockX and Chrome
+### Storefronts and Chrome
 
-StockX first attempts ordinary HTTP, then renders the public page in Chrome if access is blocked or product data is incomplete. The fallback uses its own temporary profile, never your personal Chrome profile, and does not require a StockX login. Requests share that session briefly; it closes after **30 seconds** without requests.
+StockX, GOAT prices, and Flight Club prices first attempt ordinary HTTP, then render the public page in Chrome if access is blocked or product data is incomplete. The fallback uses its own temporary profile, never your personal Chrome profile, and does not require a retailer login. Requests share that session briefly; it closes after **30 seconds** without requests. Catalog searches and Stadium Goods use HTTP without launching Chrome.
 
-The working browser mode uses **visible Chrome and a graphical desktop session**. Headless Chrome was blocked during verification. Server deployments need Chrome and a compatible display or a separate browser worker. Standard Netlify Functions do not provide this browser environment; the other three providers can still return data there.
+The default `background` mode creates **minimized, unfocused Chrome windows** so requests do not open a foreground browser window. It still requires a graphical desktop session. Set `STOCKX_BROWSER_MODE=headless` to run without windows; all three sites blocked this mode during verification, so their prices may be unavailable in `providerErrors`. Use `visible` when debugging the storefront. Linux servers can run native Chrome with a virtual display such as Xvfb. Standard Netlify Functions do not provide Chrome: catalog search and Stadium Goods can work there, while the other prices require accessible HTTP responses or a browser-capable worker.
+
+### Caching
+
+Each API instance caches successful searches and popular results for **60 seconds**, and complete price results for **30 seconds**. Concurrent requests for the same lookup share one scrape. Cached documents are copied before returning them so caller changes cannot alter later responses. Results with provider errors and rejected lookups are not stored.
+
+The cache holds at most **100 entries each** for catalog and price results. It lives in memory: restarting the process clears it, and separate workers or serverless instances keep separate caches. The first uncached request still waits for the storefronts. Disable caching with `SNEAKS_CACHE_ENABLED=false`, or change the expiry settings below.
 
 ## Configuration
 
@@ -173,8 +181,13 @@ Server settings can come from environment variables or a local `.env` file. Pass
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `PORT` | Local HTTP server port | `4000` |
-| `STOCKX_CHROME_PATH` | Chrome executable for StockX scraping | Detect a standard installation |
+| `STOCKX_CHROME_PATH` | Chrome executable shared by storefront fallbacks | Detect a standard installation |
 | `CHROME_BIN` | Alternative Chrome executable setting | Used when `STOCKX_CHROME_PATH` is unset |
+| `STOCKX_BROWSER_MODE` | `background`, `headless`, or `visible` | `background` |
+| `SNEAKS_CACHE_ENABLED` | Set to `false`, `0`, or `off` to disable caching | Enabled |
+| `SNEAKS_SEARCH_CACHE_TTL_MS` | Search and popular result lifetime; `0` disables | `60000` |
+| `SNEAKS_PRICE_CACHE_TTL_MS` | Complete price result lifetime; `0` disables | `30000` |
+| `SNEAKS_CACHE_MAX_ENTRIES` | Maximum entries in each cache | `100` |
 | `API_BASE_URL` | Running server used by live tests | `http://localhost:4000` |
 | `REQUIRE_STOCKX` | Set to `1` to require StockX size prices in live tests | StockX prices are optional in the default live suite |
 
@@ -198,7 +211,7 @@ The [CI workflow](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.y
 
 Netlify runs `npm run check` before deploying, as configured in [netlify.toml](netlify.toml).
 
-The **Live providers** workflow checks GOAT, Flight Club, and Stadium Goods daily at **11:23 UTC**. It can also run manually, with an optional **StockX browser** check on macOS. Hosted-runner traffic may be blocked even when local scraping works. Logs are retained for seven days.
+The **Live providers** workflow checks GOAT, Flight Club, and Stadium Goods daily at **11:23 UTC**, using native Chrome with an Xvfb virtual display when required. It can also run manually, with an optional **StockX browser** check on macOS. Hosted-runner traffic may be blocked even when local scraping works. Logs are retained for seven days.
 
 Scheduled runs and the manual workflow button become available once the workflow is merged into the default branch. The live jobs start and stop their own server. Live provider checks are separate from the deterministic merge checks.
 

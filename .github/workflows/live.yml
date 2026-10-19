@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       stockx_browser:
-        description: Also check StockX using visible Chrome on macOS
+        description: Also require StockX using background Chrome on macOS
         required: false
         default: false
         type: boolean
@@ -19,13 +19,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  http-providers:
-    name: Live HTTP providers
+  storefront-providers:
+    name: Live storefront providers
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # StockX has a separate desktop-browser check below.
-      STOCKX_CHROME_PATH: /nonexistent/browser-not-enabled-for-http-check
+      # Current GOAT/Flight Club prices need ordinary Chrome when HTTP is blocked.
+      # A virtual display lets native Chrome render without desktop windows.
+      STOCKX_CHROME_PATH: /usr/bin/google-chrome
+      STOCKX_BROWSER_MODE: visible
+      DISPLAY: ':99'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,9 +43,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -x "$STOCKX_CHROME_PATH"
+          Xvfb "$DISPLAY" -screen 0 1280x1024x24 > live-display.log 2>&1 &
+          display_pid=$!
           node build/server.js > live-api.log 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; kill "$display_pid" 2>/dev/null || true' EXIT
           ready=0
           for attempt in {1..30}; do
             if ! kill -0 "$server_pid" 2>/dev/null; then
@@ -61,10 +67,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: live-http-logs
+          name: live-storefront-logs
           path: |
             live-api.log
             live-check.log
+            live-display.log
           if-no-files-found: ignore
           retention-days: 7
 

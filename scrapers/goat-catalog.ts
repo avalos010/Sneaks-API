@@ -15,6 +15,7 @@ export interface GoatCatalogHit {
   slug?: string | null;
   product_template_id?: number | null;
   shoe_condition?: string | null;
+  box_condition?: string | null;
   product_category?: string | null;
   has_stock?: boolean | null;
   size?: number | null;
@@ -48,7 +49,7 @@ export async function queryGoatCatalog(
     hitsPerPage: String(count),
     distinct: String(distinct),
     page: String(page),
-    filters: "shoe_condition:new_no_defects AND product_category:shoes",
+    filters: "shoe_condition:new_no_defects AND box_condition:good_condition AND product_category:shoes",
   });
   if (!distinct) params.set("typoTolerance", "false");
   const response = await http.post(
@@ -72,7 +73,7 @@ export async function queryGoatCatalog(
 }
 
 export function isNewShoe(hit: GoatCatalogHit): boolean {
-  return hit.shoe_condition === "new_no_defects" && hit.product_category === "shoes";
+  return hit.shoe_condition === "new_no_defects" && hit.box_condition === "good_condition" && hit.product_category === "shoes";
 }
 
 export function usd(cents: number | null | undefined): number | undefined {
@@ -95,19 +96,4 @@ export async function getCatalogVariants(index: GoatCatalogIndex, styleID: strin
     if (page + 1 >= result.pages || result.hits.length === 0) break;
   }
   return hits;
-}
-
-export function catalogPrices(hits: GoatCatalogHit[]): Record<string, number> {
-  const prices: Record<string, number> = {};
-  for (const hit of hits) {
-    const price = usd(hit.lowest_price_cents_usd);
-    if (!isNewShoe(hit) || hit.has_stock === false || price === undefined) continue;
-    const size = typeof hit.size === "number" && Number.isFinite(hit.size) && hit.size > 0
-      ? String(hit.size)
-      : hit.presentation_size;
-    if (!size || (hit.size_unit && hit.size_unit !== "us")) continue;
-    const previous = prices[size];
-    prices[size] = previous === undefined ? price : Math.min(previous, price);
-  }
-  return prices;
 }

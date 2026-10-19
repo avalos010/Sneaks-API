@@ -1,8 +1,9 @@
 import { load } from "cheerio";
 import Sneaker, { type SneakerDocument } from "../models/Sneaker.js";
 import {
-  catalogPrices, getCatalogVariants, isNewShoe, normalizeStyleID, queryGoatCatalog, usd, type GoatCatalogHit,
+  getCatalogVariants, isNewShoe, normalizeStyleID, queryGoatCatalog, usd, type GoatCatalogHit,
 } from "./goat-catalog.js";
+import { getGoatStorefrontPrices } from "./goat-storefront.js";
 
 const metadata = new WeakMap<SneakerDocument, GoatCatalogHit>();
 const variants = new WeakMap<SneakerDocument, Promise<GoatCatalogHit[]>>();
@@ -11,8 +12,6 @@ function applyProduct(shoe: SneakerDocument, product: GoatCatalogHit): void {
   metadata.set(shoe, product);
   if (product.slug) shoe.resellLinks.goat = `https://www.goat.com/sneakers/${encodeURIComponent(product.slug)}`;
   if (typeof product.product_template_id === "number") shoe.goatProductId = product.product_template_id;
-  const price = usd(product.lowest_price_cents_usd);
-  if (price !== undefined && product.has_stock !== false) shoe.lowestResellPrice.goat = price;
   const image = product.original_picture_url || product.main_picture_url;
   if (image && !shoe.imageLinks.includes(image)) shoe.imageLinks.push(image);
 }
@@ -76,9 +75,11 @@ const goatScraper = {
   },
 
   async getPrices(shoe: SneakerDocument): Promise<void> {
-    if (!shoe.resellLinks.goat) return;
-    const products = await loadVariants(shoe);
-    shoe.resellPrices.goat = catalogPrices(products);
+    const link = shoe.resellLinks.goat;
+    if (!link || shoe.goatProductId === undefined) return;
+    shoe.resellPrices.goat = {};
+    shoe.set("lowestResellPrice.goat", undefined);
+    shoe.resellPrices.goat = await getGoatStorefrontPrices(link, shoe.goatProductId);
     const prices = Object.values(shoe.resellPrices.goat);
     if (prices.length) shoe.lowestResellPrice.goat = Math.min(...prices);
   },
