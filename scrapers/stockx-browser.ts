@@ -9,22 +9,36 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 type BrowserMode = "background" | "headless" | "visible";
 
 interface Session {
-  child: ChildProcess;
-  profile: string;
+  child?: ChildProcess;
+  profile?: string;
   browser: Browser;
   context: BrowserContext;
   mode: BrowserMode;
 }
 
 let session: Session | undefined;
+let startingSession: Promise<Session> | undefined;
 let queue: Promise<void> = Promise.resolve();
 let idleTimer: NodeJS.Timeout | undefined;
 let shutdownHooksInstalled = false;
+let activeOperations = 0;
+
+const bundledChromiumVersion = "v153.0.0";
 
 function browserMode(): BrowserMode {
   const mode = process.env.STOCKX_BROWSER_MODE ?? "background";
   if (mode === "background" || mode === "headless" || mode === "visible") return mode;
   throw new Error("STOCKX_BROWSER_MODE must be background, headless, or visible");
+}
+
+function isNetlifyRuntime(): boolean {
+  return process.env.NETLIFY === "true"
+    || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)
+    || Boolean(process.env.AWS_LAMBDA_JS_RUNTIME);
+}
+
+function activeBrowserMode(): BrowserMode {
+  return isNetlifyRuntime() ? "headless" : browserMode();
 }
 
 function cancelIdleClose(): void {
@@ -109,8 +123,10 @@ async function dispose(current: Session): Promise<void> {
     ]);
   } finally {
     if (closeTimer) clearTimeout(closeTimer);
-    await stopChild(current.child);
-    await rm(current.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    if (current.child) await stopChild(current.child);
+    if (current.profile) {
+      await rm(current.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
   }
 }
 
@@ -121,8 +137,8 @@ function installShutdownHooks(): void {
   process.once("exit", () => {
     // Async work cannot finish during exit; this only touches our own child/profile.
     if (session) {
-      session.child.kill("SIGTERM");
-      rmSync(session.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      session.child?.kill("SIGTERM");
+      if (session.profile) rmSync(session.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   });
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -136,6 +152,21 @@ function installShutdownHooks(): void {
 }
 
 async function startSession(mode: BrowserMode): Promise<Session> {
+  if (isNetlifyRuntime()) {
+    const { default: bundledChromium } = await import("@sparticuz/chromium-min");
+    const architecture = process.arch === "arm64" ? "arm64" : "x64";
+    const packURL = process.env.CHROMIUM_PACK_URL
+      ?? `https://github.com/Sparticuz/chromium/releases/download/${bundledChromiumVersion}/chromium-${bundledChromiumVersion}-pack.${architecture}.tar`;
+    const executablePath = await bundledChromium.executablePath(packURL);
+    const browser = await chromium.launch({
+      args: bundledChromium.args,
+      executablePath,
+      headless: true,
+    });
+    const context = await browser.newContext();
+    installShutdownHooks();
+    return { browser, context, mode: "headless" };
+  }
   const executable = await chromeExecutable();
   const profile = await mkdtemp(path.join(tmpdir(), "sneaks-stockx-chrome-"));
   const child = spawn(executable, [
@@ -201,14 +232,47 @@ async function createPage(current: Session): Promise<Page> {
 }
 
 async function currentSession(): Promise<Session> {
-  const mode = browserMode();
-  if (!session?.browser.isConnected() || !childAlive(session.child) || session.mode !== mode) {
-    const previous = session;
-    session = undefined;
-    if (previous) await dispose(previous);
-    session = await startSession(mode);
+  const mode = activeBrowserMode();
+  if (session?.browser.isConnected() && (!session.child || childAlive(session.child)) && session.mode === mode) {
+    return session;
   }
-  return session;
+  if (startingSession) return startingSession;
+
+  const previous = session;
+  session = undefined;
+  const operation = (async () => {
+    if (previous) await dispose(previous);
+    const next = await startSession(mode);
+    session = next;
+    return next;
+  })();
+  startingSession = operation;
+  try {
+    return await operation;
+  } finally {
+    if (startingSession === operation) startingSession = undefined;
+  }
+}
+
+function runBrowserOperation<T>(run: () => Promise<T>): Promise<T> {
+  const execute = async (): Promise<T> => {
+    cancelIdleClose();
+    activeOperations += 1;
+    try {
+      return await run();
+    } finally {
+      activeOperations -= 1;
+      if (activeOperations === 0) {
+        idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
+        idleTimer.unref();
+      }
+    }
+  };
+  if (isNetlifyRuntime()) return execute();
+
+  const operation = queue.then(execute);
+  queue = operation.then(() => {}, () => {});
+  return operation;
 }
 
 async function readGoatPrices(url: URL, templateId: number): Promise<unknown> {
@@ -313,18 +377,7 @@ const stockXBrowser = {
     } catch (error) {
       return Promise.reject(error);
     }
-    cancelIdleClose();
-    const operation = queue.then(async () => {
-      cancelIdleClose();
-      try {
-        return await readPage(url);
-      } finally {
-        idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
-        idleTimer.unref();
-      }
-    });
-    queue = operation.then(() => {}, () => {});
-    return operation;
+    return runBrowserOperation(() => readPage(url));
   },
 
   getGoatPrices(value: string, templateId: number): Promise<unknown> {
@@ -334,18 +387,7 @@ const stockXBrowser = {
     } catch (error) {
       return Promise.reject(error);
     }
-    cancelIdleClose();
-    const operation = queue.then(async () => {
-      cancelIdleClose();
-      try {
-        return await readGoatPrices(url, templateId);
-      } finally {
-        idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
-        idleTimer.unref();
-      }
-    });
-    queue = operation.then(() => {}, () => {});
-    return operation;
+    return runBrowserOperation(() => readGoatPrices(url, templateId));
   },
 
   getFlightClubPage(value: string): Promise<string> {
@@ -355,24 +397,14 @@ const stockXBrowser = {
     } catch (error) {
       return Promise.reject(error);
     }
-    cancelIdleClose();
-    const operation = queue.then(async () => {
-      cancelIdleClose();
-      try {
-        return await readFlightClubPage(url);
-      } finally {
-        idleTimer = setTimeout(() => { void stockXBrowser.close().catch(() => {}); }, 30_000);
-        idleTimer.unref();
-      }
-    });
-    queue = operation.then(() => {}, () => {});
-    return operation;
+    return runBrowserOperation(() => readFlightClubPage(url));
   },
 
   close(): Promise<void> {
     cancelIdleClose();
     const operation = queue.then(async () => {
       cancelIdleClose();
+      while (activeOperations > 0) await delay(20);
       const current = session;
       session = undefined;
       if (current) await dispose(current);

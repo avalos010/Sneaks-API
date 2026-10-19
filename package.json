@@ -52,6 +52,7 @@
   "homepage": "https://github.com/druv5319/Sneaks-API#readme",
   "dependencies": {
     "@types/express": "^5.0.6",
+    "@sparticuz/chromium-min": "^153.0.0",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",

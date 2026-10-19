@@ -166,7 +166,9 @@ Public storefronts can change their markup, inventory, or access rules. Passing 
 
 StockX, GOAT prices, and Flight Club prices first attempt ordinary HTTP, then render the public page in Chrome if access is blocked or product data is incomplete. The fallback uses its own temporary profile, never your personal Chrome profile, and does not require a retailer login. Requests share that session briefly; it closes after **30 seconds** without requests. Catalog searches and Stadium Goods use HTTP without launching Chrome.
 
-The default `background` mode creates **minimized, unfocused Chrome windows** so requests do not open a foreground browser window. It still requires a graphical desktop session. Set `STOCKX_BROWSER_MODE=headless` to run without windows; all three sites blocked this mode during verification, so their prices may be unavailable in `providerErrors`. Use `visible` when debugging the storefront. Linux servers can run native Chrome with a virtual display such as Xvfb. Standard Netlify Functions do not provide Chrome: catalog search and Stadium Goods can work there, while the other prices require accessible HTTP responses or a browser-capable worker.
+The default `background` mode creates **minimized, unfocused Chrome windows** so requests do not open a foreground browser window. It still requires a graphical desktop session. Set `STOCKX_BROWSER_MODE=headless` to run without windows; all three sites blocked this mode during verification, so their prices may be unavailable in `providerErrors`. Use `visible` when debugging the storefront. Linux servers can run native Chrome with a virtual display such as Xvfb.
+
+Netlify Functions use the small `@sparticuz/chromium-min` package and download its matching Chromium pack from the project's GitHub release on the first cold start. The extracted browser is reused in the warm function environment. Set `CHROMIUM_PACK_URL` to an HTTPS mirror if needed. Cold starts therefore depend on the pack download and browser extraction completing within Netlify's function execution limit; retailer access can still be blocked, and unavailable quotes remain visible in `providerErrors`.
 
 ### Caching
 
@@ -184,6 +186,7 @@ Server settings can come from environment variables or a local `.env` file. Pass
 | `STOCKX_CHROME_PATH` | Chrome executable shared by storefront fallbacks | Detect a standard installation |
 | `CHROME_BIN` | Alternative Chrome executable setting | Used when `STOCKX_CHROME_PATH` is unset |
 | `STOCKX_BROWSER_MODE` | `background`, `headless`, or `visible` | `background` |
+| `CHROMIUM_PACK_URL` | HTTPS URL for the Chromium pack used by Netlify Functions | Matching x64/arm64 GitHub release |
 | `SNEAKS_CACHE_ENABLED` | Set to `false`, `0`, or `off` to disable caching | Enabled |
 | `SNEAKS_SEARCH_CACHE_TTL_MS` | Search and popular result lifetime; `0` disables | `60000` |
 | `SNEAKS_PRICE_CACHE_TTL_MS` | Complete price result lifetime; `0` disables | `30000` |
