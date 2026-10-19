@@ -167,6 +167,33 @@ curl 'http://localhost:4000/.netlify/functions/api/search/Yeezy%20Cinder?count=1
 
 Netlify builds the TypeScript function from `src/api.ts` using its native TypeScript support and the esbuild function bundler configured in `netlify.toml`. This replaces the previous netlify-lambda, Babel, and webpack workflow.
 
+## CI and deployment checks
+
+The **CI** workflow runs on every push, pull request, and merge-queue update. It validates Node.js 22 and 24 with lint (including the no-`any` rule), strict typechecking, mocked provider tests, compilation, a built-library/serverless-handler smoke check, and npm package validation. Its final **Required checks** status succeeds only when both Node versions pass. Dependabot checks the pinned GitHub Actions versions weekly.
+
+Netlify runs `npm run check` before deploying through the build command in `netlify.toml`. This validates the code before deployment; production live checks are separate.
+
+The **Live providers** workflow checks real catalog results and GOAT, Flight Club, and Stadium Goods size prices daily at **11:23 UTC**. Run it manually from GitHub Actions to check sooner. Its optional **StockX browser** input also runs the complete live suite with visible Chrome on a macOS runner. StockX may block hosted-runner traffic even when local scraping works; logs are retained for seven days. Live checks use known product fixtures, whose availability can also change. They are separate from the deterministic merge gate.
+
+Scheduled runs and the manual workflow button become available after the workflow is merged into the repository's default branch. The built server is started and stopped automatically by each live-check job.
+
+### Require passing checks before merging
+
+Adding a workflow does not itself block merges. After pushing the workflow, an administrator can enable the **Require CI before merging** ruleset on the default branch:
+
+```sh
+gh auth login
+npm run ci:protect
+```
+
+The command requires repository administration access. It creates or updates only its own named ruleset, leaving other rulesets intact. The rule requires the **Required checks** status to pass on an up-to-date commit. Preview the exact configuration without changing GitHub:
+
+```sh
+npm run ci:protect -- --dry-run --repo avalos010/Sneaks-API
+```
+
+Alternatively, use GitHub **Settings → Rules → Rulesets** to require the same status check for the default branch.
+
 ## Data Availability
 
 Search and popular products use the GOAT storefront catalog. Popular products follow the catalog's default ranking. GOAT and Flight Club prices and images come from their storefront search records; Stadium Goods uses its Shopify storefront. The retired StockX Algolia index, GOAT web API, Flight Club token/GraphQL calls, and Stadium Goods GraphQL hostname are no longer used.

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Lint (including no explicit any)
+        run: npm run lint
+      - name: Strict typecheck
+        run: npm run typecheck
+      - name: Tests with mocked providers
+        run: npm test
+      - name: Build JavaScript and declarations
+        run: npm run build
+      - name: Check built library and serverless handler
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import SneaksAPI, { SneaksAPI as NamedAPI, handler } from './build/index.js';
+          assert.equal(SneaksAPI, NamedAPI);
+          assert.equal(typeof new SneaksAPI().getProducts, 'function');
+          const response = await handler({
+            httpMethod: 'GET', path: '/.netlify/functions/api/', headers: {},
+            body: null, isBase64Encoded: false,
+          }, {});
+          assert.equal(response.statusCode, 200);
+          assert.equal(response.body, 'Hello World');
+          JS
+      - name: Check npm package contents
+        run: npm pack --dry-run --ignore-scripts
+
+  required-checks:
+    name: Required checks
+    if: always()
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          RESULT: ${{ needs.validate.result }}
+        run: test "$RESULT" = success

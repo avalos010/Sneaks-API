@@ -39,6 +39,13 @@ for (const prefix of ["", "/.netlify/functions/api"]) {
     assert.ok(Object.values(prices).every((price) => typeof price === "number" && price > 0));
   }
 }
+const stadiumProduct = await check("/id/AV5354-611/prices", 200);
+assertRecord(stadiumProduct);
+assertRecord(stadiumProduct.resellPrices);
+const stadiumPrices = stadiumProduct.resellPrices.stadiumGoods;
+assertRecord(stadiumPrices);
+assert.ok(Object.keys(stadiumPrices).length > 0, "Stadium Goods should return actual size prices for AV5354-611");
+assert.ok(Object.values(stadiumPrices).every((price) => typeof price === "number" && price > 0));
 await check("/popular?count=0", 400);
 await check("/id/THIS-STYLE-DOES-NOT-EXIST-000000/prices", 404);
-console.log(`Live endpoint checks passed, including GOAT, Flight Club${process.env.REQUIRE_STOCKX === "1" ? ", and StockX" : ""} size prices.`);
+console.log(`Live endpoint checks passed, including GOAT, Flight Club, Stadium Goods${process.env.REQUIRE_STOCKX === "1" ? ", and StockX" : ""} size prices.`);

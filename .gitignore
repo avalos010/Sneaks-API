@@ -8,3 +8,5 @@ build/
 .netlify/
 coverage/
 *.tsbuildinfo
+/live-api.log
+/live-check.log
