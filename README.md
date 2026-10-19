@@ -17,9 +17,7 @@
 
 A StockX API, FlightClub API, Goat API, and Stadium Goods API all in one.
 
-Sneaks API is a sneaker API built using Node.JS, Express, and Got. The Sneaks API allows users to get essential sneaker content such as images, product links and even prices from resell sites while also collecting data and storing it within a database. This API mainly scrapes StockX for sneaker information and then asynchronously scrapes Stadium Goods, Goat, and Flight Club for additional sneaker information such as images and its respective resell price. This API outputs a sneaker object of the following variables:
-
-**UPDATE 1.2.3**: Updated and fixed the Goat API to reflect their API changes. Removed the web server (localhost:4000) the package creates.
+Sneaks API is a sneaker API built with TypeScript, Node.js, Express, and Got. It collects sneaker information from StockX and price information from Stadium Goods, Goat, and Flight Club. Product data can include:
 
   - Sneaker Name
   - Colorway
@@ -45,45 +43,127 @@ I built this API so sneaker heads and developers are able to create sneaker base
   <img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/euCdtWvMESTjo9_Smd_wRpoNvhk6XOr3n3QlnHYNRAHHU.width-1000_RWrysBn-2.png" width="350"> <img src="https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/syHg2FzA1dcFjpp6XlqNq_ZRNDXJPcdWCJzGhBcU2PPXv.width-1000_VZzgt9G.png" width="350">
 
 
-## Technologies Used
-  - Node.JS
-  - Express
-  - Got
-  - Request
-  - Mongoose
-  
-
-  
 ## Installation
-To use this API you will need to have [node.js](https://nodejs.org/en/) installed.
-Once installed, use this line on the terminal within your Node.js project directory
-```
+
+Use Node.js 22.12 or newer. This branch migrates the project to strict TypeScript and native ES modules. The build includes TypeScript declarations at `build/index.d.ts`.
+
+```sh
 npm install sneaks-api
 ```
-and place this line at the top of your main file
-```js
-const SneaksAPI = require('sneaks-api');
-```
+
 ## How to Use
-```js
-const SneaksAPI = require('sneaks-api');
+
+All three methods support Promises:
+
+```ts
+import SneaksAPI from 'sneaks-api';
+
 const sneaks = new SneaksAPI();
 
-//getProducts(keyword, limit, callback) takes in a keyword and limit and returns a product array 
-sneaks.getProducts("Yeezy Cinder", 10, function(err, products){
-    console.log(products)
-})
+try {
+    const products = await sneaks.getProducts('Yeezy Cinder', 10);
+    console.log(products);
 
-//Product object includes styleID where you input it in the getProductPrices function
-//getProductPrices(styleID, callback) takes in a style ID and returns sneaker info including a price map and more images of the product
-sneaks.getProductPrices("FY2903", function(err, product){
-    console.log(product)
-})
-//getMostPopular(limit, callback) takes in a limit and returns an array of the current popular products curated by StockX
-sneaks.getMostPopular(10, function(err, products){
-    console.log(products)
-})
+    // Use a product's styleID to retrieve its prices and additional details.
+    const product = await sneaks.getProductPrices('FY2903');
+    console.log(product);
+
+    const popular = await sneaks.getMostPopular(10);
+    console.log(popular);
+} catch (error) {
+    console.error(error);
+}
 ```
+
+Callback usage is also supported:
+
+```ts
+import SneaksAPI from 'sneaks-api';
+
+const sneaks = new SneaksAPI();
+
+sneaks.getProducts('Yeezy Cinder', 10, (error, products) => {
+    if (error) {
+        console.error(error);
+        return;
+    }
+    console.log(products);
+});
+
+sneaks.getProductPrices('FY2903', (error, product) => {
+    if (error) {
+        console.error(error);
+        return;
+    }
+    console.log(product);
+});
+
+sneaks.getMostPopular(10, (error, products) => {
+    if (error) {
+        console.error(error);
+        return;
+    }
+    console.log(products);
+});
+```
+
+For a CommonJS application, replace `require('sneaks-api')` with dynamic import inside an async function:
+
+```js
+async function main() {
+    const { default: SneaksAPI } = await import('sneaks-api');
+    const sneaks = new SneaksAPI();
+    console.log(await sneaks.getMostPopular(10));
+}
+
+main().catch(console.error);
+```
+
 [Console log](https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/exampleSearchScreenshot%231.png) of sneaks.getProducts("Yeezy Cinder", ...)           
 [Console log](https://github.com/druv5319/Sneaks-API/blob/master/Screenshots/exampleSearchScreenshot%232.png) of sneaks.getProductPrices("FY2903", ...)
+
+## Local Development
+
+Use npm for dependency installation; `package-lock.json` is the sole lockfile.
+
+```sh
+npm ci
+npm run dev
+```
+
+The development server listens on port 4000. To check and build the project:
+
+```sh
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm start
+```
+
+`npm start` runs the built local server, so run `npm run build` first. Importing the library does not start a server.
+
+Run `npm run check` for lint, typecheck, tests, and build together. TypeScript strict mode rejects implicit `any`; lint rejects explicit `any` and comments that suppress type checking.
+
+## HTTP API and Netlify
+
+The local server and Netlify function expose these routes:
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/.netlify/functions/api/popular` | Popular products |
+| GET | `/.netlify/functions/api/search/:shoe` | Search by a URL-encoded sneaker keyword |
+| GET | `/.netlify/functions/api/id/:id/prices` | Product details and prices for a style ID |
+
+The popular and search routes accept a `count` query parameter. It defaults to 40 and must be an integer from 1 to 100. For example:
+
+```sh
+curl 'http://localhost:4000/.netlify/functions/api/search/Yeezy%20Cinder?count=10'
+```
+
+Netlify builds the TypeScript function from `src/api.ts` using its native TypeScript support and the esbuild function bundler configured in `netlify.toml`. This replaces the previous netlify-lambda, Babel, and webpack workflow.
+
+## Data Availability
+
+The scrapers depend on undocumented third-party endpoints. Those services can change their responses or block requests, and live availability is not guaranteed. Automated tests use mocked responses to check behavior; passing tests do not establish that every live scraper endpoint works.
 

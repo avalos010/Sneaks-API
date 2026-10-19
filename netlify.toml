@@ -1,7 +1,17 @@
 [build]
-  functions = "functions"
+  command = "npm run build"
+  functions = "src"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
 
 [dev]
+  command = "npm run dev"
+  targetPort = 4000
   publish = "dist"
 
 [[redirects]]

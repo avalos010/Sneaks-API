@@ -2,12 +2,30 @@
   "name": "sneaks-api",
   "version": "1.2.1",
   "description": "A RESTful API that collects and returns data on sneakers. This API will also find, compare and return a link of where to buy the sneaker based on the price.",
-  "main": "index.js",
-  "type": "commonjs",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "./node_modules/.bin/netlify-lambda serve src",
-    "build": "./node_modules/.bin/netlify-lambda build src"
+    "test": "node --import tsx --test test/*.test.ts",
+    "start": "node build/server.js",
+    "dev": "tsx watch server.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -31,21 +49,21 @@
   },
   "homepage": "https://github.com/druv5319/Sneaks-API#readme",
   "dependencies": {
-    "cheerio": "^1.0.0-rc.3",
-    "core-util-is": "^1.0.2",
-    "cors": "^2.8.5",
-    "dotenv": "^8.2.0",
-    "express": "^4.18.2",
-    "got": "^11.6.0",
-    "mongoose": "^5.10.3",
-    "netlify-lambda": "^2.0.16",
-    "request": "^2.65.0",
-    "serverless-http": "^3.2.0"
+    "@types/express": "^5.0.6",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "got": "^16.1.0",
+    "mongoose": "^9.11.2",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.21.3",
-    "@babel/preset-env": "^7.20.2",
-    "babel-loader": "^9.1.2",
-    "webpack": "^5.76.3"
+    "@types/cors": "^2.8.19",
+    "@types/node": "^22.20.5",
+    "nock": "^15.0.2",
+    "oxlint": "^1.88.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }

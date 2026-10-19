@@ -4,3 +4,7 @@ npm-debug.log
 /*.env
 node_modules
 functions
+build/
+.netlify/
+coverage/
+*.tsbuildinfo
