@@ -18,7 +18,7 @@ function mockEnrichment(context: TestContext): void {
 }
 
 test("empty searches resolve and invoke callbacks once", async (context) => {
-  const search = context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   const api = new SneaksAPI();
   assert.deepEqual(await api.getProducts("missing"), []);
   let calls = 0;
@@ -32,8 +32,8 @@ test("empty searches resolve and invoke callbacks once", async (context) => {
 });
 
 test("provider errors reject promises and reach callbacks once", async (context) => {
-  const failure = new Error("StockX unavailable");
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => { throw failure; });
+  const failure = new Error("Catalog unavailable");
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => { throw failure; });
   const api = new SneaksAPI();
   await assert.rejects(api.getProducts("shoe"), failure);
   let calls = 0;
@@ -47,21 +47,20 @@ test("provider errors reject promises and reach callbacks once", async (context)
 
 test("optional link failures preserve products and other enrichment", async (context) => {
   mockEnrichment(context);
-  const shoe = new Sneaker({ styleID: "ABC-123" });
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => [shoe]);
+  const shoe = new Sneaker({ styleID: "ABC-123", resellLinks: { goat: "https://www.goat.com/sneakers/abc-123" } });
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => [shoe]);
   context.mock.method(flightClubScraper, "getLink", async () => { throw new Error("Unavailable"); });
-  context.mock.method(goatScraper, "getLink", async (product: SneakerDocument) => {
-    product.resellLinks.goat = "https://www.goat.com/sneakers/abc-123";
-  });
   const products = await new SneaksAPI().getProducts("shoe", 1);
   assert.equal(products[0], shoe);
   assert.equal(shoe.resellLinks.goat, "https://www.goat.com/sneakers/abc-123");
+  assert.equal(shoe.providerErrors[0]?.provider, "flightClub");
+  assert.equal(shoe.providerErrors[0]?.message, "Unavailable");
 });
 
-test("prices and pictures finish despite individual retailer failures", async (context) => {
+test("prices and pictures work without StockX developer credentials", async (context) => {
   mockEnrichment(context);
   const shoe = new Sneaker({ styleID: "ABC-123" });
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => [shoe]);
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => [shoe]);
   const stockXPrices = context.mock.method(stockXScraper, "getPrices", async () => {
     throw new Error("Unavailable");
   });
@@ -77,7 +76,9 @@ test("prices and pictures finish despite individual retailer failures", async (c
   assert.equal(await api.getProductPrices("abc-123"), shoe);
   assert.equal(shoe.resellPrices.goat?.["9"], 125);
   assert.deepEqual(Array.from(shoe.imageLinks), ["https://example.com/shoe.jpg"]);
-  for (const operation of [stockXPrices, stadiumPrices, flightPrices, goatPrices, pictures]) {
+  assert.equal(stockXPrices.mock.callCount(), 1);
+  assert.equal(shoe.providerErrors.find((error) => error.provider === "stockX")?.operation, "prices");
+  for (const operation of [stadiumPrices, flightPrices, goatPrices, pictures]) {
     assert.equal(operation.mock.callCount(), 1);
   }
   let calls = 0;
@@ -92,7 +93,7 @@ test("prices and pictures finish despite individual retailer failures", async (c
 test("empty and mismatched product lookups report missing products", async (context) => {
   mockEnrichment(context);
   const api = new SneaksAPI();
-  const search = context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   await assert.rejects(api.getProductPrices("missing"), ProductNotFoundError);
   let calls = 0;
   await api.getProductPrices("missing", (error, product) => {
@@ -102,12 +103,29 @@ test("empty and mismatched product lookups report missing products", async (cont
   });
   assert.equal(calls, 1);
   search.mock.restore();
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => [new Sneaker({ styleID: "OTHER" })]);
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => [new Sneaker({ styleID: "OTHER" })]);
   await assert.rejects(api.getProductPrices("requested"), ProductNotFoundError);
 });
 
+test("a failed pricing provider is reported while other size prices remain available", async (context) => {
+  mockEnrichment(context);
+  const shoe = new Sneaker({ styleID: "ABC-123" });
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => [shoe]);
+  context.mock.method(flightClubScraper, "getPrices", async () => {
+    throw new Error("Flight Club unavailable");
+  });
+  context.mock.method(goatScraper, "getPrices", async (product: SneakerDocument) => {
+    product.resellPrices.goat = { "9": 125 };
+  });
+  const product = await new SneaksAPI().getProductPrices("ABC-123");
+  assert.equal(product.resellPrices.goat?.["9"], 125);
+  const failure = product.providerErrors.find((error) => error.provider === "flightClub");
+  assert.equal(failure?.operation, "prices");
+  assert.equal(failure?.message, "Flight Club unavailable");
+});
+
 test("consumer callback exceptions reject without invoking callbacks again", async (context) => {
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   const failure = new Error("Consumer callback failed");
   let calls = 0;
   await assert.rejects(new SneaksAPI().getProducts("shoe", 1, () => {
@@ -118,7 +136,7 @@ test("consumer callback exceptions reject without invoking callbacks again", asy
 });
 
 test("popular products use the empty keyword with promise and callback APIs", async (context) => {
-  const search = context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   const api = new SneaksAPI();
   assert.deepEqual(await api.getMostPopular(), []);
   assert.deepEqual(search.mock.calls[0]?.arguments, ["", 40]);
@@ -157,7 +175,7 @@ test("serverless root and Netlify-prefixed routes respond with CORS", async () =
 });
 
 test("serverless search and popular routes apply default and explicit counts", async (context) => {
-  const search = context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   let response = await request("/search/jordan");
   assert.equal(response.status, 200);
   assert.equal(response.body, "[]");
@@ -168,7 +186,7 @@ test("serverless search and popular routes apply default and explicit counts", a
 });
 
 test("invalid route counts return 400 before searching", async (context) => {
-  const search = context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   for (const count of ["0", "-1", "101", "1.5", "two", "", "1e2", "9007199254740992"]) {
     for (const path of ["/popular", "/.netlify/functions/api/search/jordan"]) {
       const response = await request(path, { count });
@@ -180,11 +198,11 @@ test("invalid route counts return 400 before searching", async (context) => {
 });
 
 test("missing product routes return 404 and provider failures return 502", async (context) => {
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => []);
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   let response = await request("/.netlify/functions/api/id/ABC-123/prices");
   assert.equal(response.status, 404);
   assert.equal(response.body, JSON.stringify({ error: "Product Not Found" }));
-  context.mock.method(stockXScraper, "getProductsAndInfo", async () => { throw new Error("Upstream unavailable"); });
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => { throw new Error("Upstream unavailable"); });
   for (const path of ["/search/jordan", "/popular", "/id/ABC-123/prices"]) {
     response = await request(path);
     assert.equal(response.status, 502);

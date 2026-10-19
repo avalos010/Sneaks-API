@@ -17,7 +17,7 @@
 
 A StockX API, FlightClub API, Goat API, and Stadium Goods API all in one.
 
-Sneaks API is a sneaker API built with TypeScript, Node.js, Express, and Got. It collects sneaker information from StockX and price information from Stadium Goods, Goat, and Flight Club. Product data can include:
+Sneaks API is a sneaker API built with TypeScript, Node.js, Express, and Got. It searches the GOAT storefront catalog and collects publicly available prices from GOAT, Flight Club, Stadium Goods, and StockX. No developer account or private API key is required. Product data can include:
 
   - Sneaker Name
   - Colorway
@@ -145,6 +145,10 @@ npm start
 
 Run `npm run check` for lint, typecheck, tests, and build together. TypeScript strict mode rejects implicit `any`; lint rejects explicit `any` and comments that suppress type checking.
 
+With the server running, use `npm run test:live` to exercise both route prefixes, catalog results, actual GOAT and Flight Club size prices, and validation. Set `API_BASE_URL` to test another running instance.
+
+Use `REQUIRE_STOCKX=1 npm run test:live` to require real StockX size prices as well. StockX's browser fallback needs Google Chrome installed and a graphical desktop session. It opens its own temporary Chrome profile, reuses it briefly, and closes it after 30 seconds without requests. It does not use your personal Chrome profile or require a StockX login. Set `STOCKX_CHROME_PATH` (or `CHROME_BIN`) if Chrome is installed somewhere other than a standard location.
+
 ## HTTP API and Netlify
 
 The local server and Netlify function expose these routes:
@@ -165,5 +169,18 @@ Netlify builds the TypeScript function from `src/api.ts` using its native TypeSc
 
 ## Data Availability
 
-The scrapers depend on undocumented third-party endpoints. Those services can change their responses or block requests, and live availability is not guaranteed. Automated tests use mocked responses to check behavior; passing tests do not establish that every live scraper endpoint works.
+Search and popular products use the GOAT storefront catalog. Popular products follow the catalog's default ranking. GOAT and Flight Club prices and images come from their storefront search records; Stadium Goods uses its Shopify storefront. The retired StockX Algolia index, GOAT web API, Flight Club token/GraphQL calls, and Stadium Goods GraphQL hostname are no longer used.
+
+| Provider | Current integration |
+| --- | --- |
+| GOAT | `POST https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries`, index `product_variants_v2` |
+| Flight Club | Same catalog URL, index `product_variants_v2_flight_club` |
+| Stadium Goods | `GET https://www.stadiumgoods.com/search/suggest.json` and `GET /products/{handle}.js` |
+| StockX | Public search/product pages at `https://stockx.com`, with embedded product data when the site permits access |
+
+StockX uses ordinary HTTP when the returned page contains complete product data, then renders the public page in Chrome when necessary. The browser transport currently uses visible Chrome: headless Chrome was blocked during live verification. A server deployment needs a compatible Chrome installation and graphical display or a separate browser worker; standard Netlify Functions do not provide these. The other three providers use HTTP and continue to work when the StockX browser is unavailable.
+
+Provider failures are reported in the product's `providerErrors` array, rather than represented as zero prices. The other providers continue to return data when one provider blocks a request. A provider with no matching product or no available sizes can have an empty price map.
+
+Storefront endpoints can change their responses or block requests. Automated tests use mocked responses to check parsing and error handling; live smoke tests verify the currently reachable integrations.
 

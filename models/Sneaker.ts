@@ -3,6 +3,11 @@ import type { HydratedDocument, Model } from "mongoose";
 
 export type Retailer = "stockX" | "stadiumGoods" | "goat" | "flightClub";
 export type PriceMap = Record<string, number>;
+export interface ProviderError {
+  provider: Retailer;
+  operation: "links" | "prices" | "pictures";
+  message: string;
+}
 
 export interface SneakerData {
   shoeName?: string;
@@ -23,6 +28,7 @@ export interface SneakerData {
   size?: number;
   lowestResellPrice: Partial<Record<Retailer, number>>;
   resellPrices: Partial<Record<Retailer, PriceMap>>;
+  providerErrors: ProviderError[];
 }
 
 export type SneakerDocument = HydratedDocument<SneakerData>;
@@ -59,6 +65,14 @@ const SneakerSchema = new Schema<SneakerData>({
     goat: { type: Object, default: {} },
     stadiumGoods: { type: Object, default: {} },
     flightClub: { type: Object, default: {} },
+  },
+  providerErrors: {
+    type: [new Schema<ProviderError>({
+      provider: { type: String, required: true },
+      operation: { type: String, required: true },
+      message: { type: String, required: true },
+    }, { _id: false })],
+    default: [],
   },
 });
 
