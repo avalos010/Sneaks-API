@@ -4,7 +4,7 @@
 
 # Sneaks API
 
-[![CI](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml/badge.svg?branch=chore%2Ftypescript-dependency-upgrade)](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml)
+[![CI](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/avalos010/Sneaks-API/actions/workflows/ci.yml)
 ![Node.js 22.12+](https://img.shields.io/badge/node-%3E%3D22.12-green)
 ![Strict TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
 
@@ -24,10 +24,10 @@ This fork uses strict TypeScript and native ES modules, preserves the callback A
 
 Use **Node.js 22.12 or newer** and npm. A MongoDB connection is not required. Install Google Chrome if you want StockX's browser fallback.
 
-The current migration is on `chore/typescript-dependency-upgrade`:
+Clone the repository's default branch:
 
 ```sh
-git clone --branch chore/typescript-dependency-upgrade https://github.com/avalos010/Sneaks-API.git
+git clone https://github.com/avalos010/Sneaks-API.git
 cd Sneaks-API
 npm ci
 npm run dev
