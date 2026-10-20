@@ -151,6 +151,21 @@ function installShutdownHooks(): void {
   }
 }
 
+async function headlessContext(browser: Browser): Promise<BrowserContext> {
+  const control = await browser.newBrowserCDPSession();
+  try {
+    const { userAgent } = await control.send("Browser.getVersion");
+    // The public storefronts reject the HeadlessChrome user-agent even when
+    // Chrome can render them. Keep the actual browser version and platform.
+    return await browser.newContext({
+      userAgent: userAgent.replace("HeadlessChrome/", "Chrome/"),
+      locale: "en-US",
+    });
+  } finally {
+    await control.detach().catch(() => {});
+  }
+}
+
 async function startSession(mode: BrowserMode): Promise<Session> {
   if (isNetlifyRuntime()) {
     const { default: bundledChromium } = await import("@sparticuz/chromium-min");
@@ -163,9 +178,14 @@ async function startSession(mode: BrowserMode): Promise<Session> {
       executablePath,
       headless: true,
     });
-    const context = await browser.newContext();
-    installShutdownHooks();
-    return { browser, context, mode: "headless" };
+    try {
+      const context = await headlessContext(browser);
+      installShutdownHooks();
+      return { browser, context, mode: "headless" };
+    } catch (error) {
+      await browser.close().catch(() => {});
+      throw error;
+    }
   }
   const executable = await chromeExecutable();
   const profile = await mkdtemp(path.join(tmpdir(), "sneaks-stockx-chrome-"));
@@ -200,7 +220,7 @@ async function startSession(mode: BrowserMode): Promise<Session> {
     }
     if (!port) throw new Error("Chrome did not start its local debugging endpoint within 15 seconds");
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 15_000 });
-    const context = browser.contexts()[0];
+    const context = mode === "headless" ? await headlessContext(browser) : browser.contexts()[0];
     if (!context) throw new Error("Chrome did not provide a browsing context");
     installShutdownHooks();
     return { child, profile, browser, context, mode };
