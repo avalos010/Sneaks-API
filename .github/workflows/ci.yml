@@ -36,6 +36,9 @@ jobs:
       - name: Strict typecheck
         run: npm run typecheck
       - name: Tests with mocked providers
+        env:
+          # Match Netlify's build environment without allowing real browser IO.
+          NETLIFY: 'true'
         run: npm test
       - name: Build JavaScript and declarations
         run: npm run build

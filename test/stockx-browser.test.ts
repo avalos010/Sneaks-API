@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { after, before, test } from "node:test";
+import bundledChromium from "@sparticuz/chromium-min";
+import { chromium } from "playwright-core";
 import stockXBrowser from "../scrapers/stockx-browser.js";
+
+const runtimeFlags = ["NETLIFY", "AWS_LAMBDA_FUNCTION_NAME", "AWS_LAMBDA_JS_RUNTIME"] as const;
+const originalRuntime = new Map(runtimeFlags.map((name) => [name, process.env[name]]));
+
+before(() => {
+  // Netlify sets NETLIFY=true during builds too. These unit tests must select
+  // their runtime explicitly instead of downloading or launching a browser.
+  for (const name of runtimeFlags) delete process.env[name];
+});
+after(async () => {
+  await stockXBrowser.close();
+  for (const [name, value] of originalRuntime) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+});
 
 test("browser rejects an invalid mode before launching Chrome", async () => {
   const previous = process.env.STOCKX_BROWSER_MODE;
@@ -71,6 +89,28 @@ test("browser reports a missing configured executable and recovers the navigatio
     await stockXBrowser.close();
     await assert.rejects(stockXBrowser.getPage("https://stockx.com/search?s=FY2903"), /Install Google Chrome or set STOCKX_CHROME_PATH/);
   } finally {
+    if (configured === undefined) delete process.env.STOCKX_CHROME_PATH;
+    else process.env.STOCKX_CHROME_PATH = configured;
+    await stockXBrowser.close();
+  }
+});
+
+test("Netlify runtime selects bundled Chromium without native Chrome discovery", async (context) => {
+  process.env.NETLIFY = "true";
+  const configured = process.env.STOCKX_CHROME_PATH;
+  process.env.STOCKX_CHROME_PATH = "/nonexistent/sneaks-test-chrome";
+  const download = context.mock.method(bundledChromium, "executablePath", async () => {
+    throw new Error("Mocked Chromium pack download");
+  });
+  const launch = context.mock.method(chromium, "launch", async () => {
+    throw new Error("No browser may launch in this unit test");
+  });
+  try {
+    await assert.rejects(stockXBrowser.getPage("https://stockx.com/search?s=FY2903"), /Mocked Chromium pack download/);
+    assert.equal(download.mock.callCount(), 1);
+    assert.equal(launch.mock.callCount(), 0);
+  } finally {
+    delete process.env.NETLIFY;
     if (configured === undefined) delete process.env.STOCKX_CHROME_PATH;
     else process.env.STOCKX_CHROME_PATH = configured;
     await stockXBrowser.close();
