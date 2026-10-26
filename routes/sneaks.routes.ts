@@ -1,6 +1,7 @@
 import cors from "cors";
 import { Router, type Response } from "express";
 import SneaksAPI, { ProductNotFoundError } from "../controllers/sneaks.controllers.js";
+import type { Retailer } from "../models/Sneaker.js";
 
 function parseCount(value: unknown): number | undefined {
   if (value === undefined) return 40;
@@ -56,6 +57,19 @@ export function createRoutes(sneaks = new SneaksAPI()): Router {
   router.get("/id/:id/prices", async (request, response) => {
     try {
       response.json(await sneaks.getProductPrices(request.params.id.toUpperCase()));
+    } catch (error: unknown) {
+      sendProviderError(response, error);
+    }
+  });
+
+  router.get("/id/:id/prices/:provider", async (request, response) => {
+    const provider = request.params.provider;
+    if (!["goat", "flightClub", "stadiumGoods", "stockX"].includes(provider)) {
+      response.status(400).json({ error: "Unknown provider" });
+      return;
+    }
+    try {
+      response.json(await sneaks.getSellerPrices(request.params.id, provider as Retailer));
     } catch (error: unknown) {
       sendProviderError(response, error);
     }

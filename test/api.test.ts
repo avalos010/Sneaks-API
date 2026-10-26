@@ -214,6 +214,31 @@ test("catalog-only search returns promptly without price enrichment", async (con
   assert.equal(prices.mock.callCount(), 0);
 });
 
+test("individual seller prices return independently and share catalog discovery", async (context) => {
+  const shoe = new Sneaker({ styleID: "ABC-123", resellLinks: { goat: "https://www.goat.com/sneakers/shoe" } });
+  const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => [shoe]);
+  let release: (() => void) | undefined;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  context.mock.method(stockXScraper, "getPrices", async () => { await blocked; });
+  context.mock.method(goatScraper, "getPrices", async (product: SneakerDocument) => {
+    product.resellPrices.goat = { "9": 125 };
+  });
+  const api = new SneaksAPI();
+  const slow = api.getSellerPrices("abc-123", "stockX");
+  const fast = await api.getSellerPrices("ABC-123", "goat");
+  assert.equal(fast.resellPrices.goat?.["9"], 125);
+  assert.deepEqual(shoe.resellPrices.goat, {});
+  assert.equal(search.mock.callCount(), 1);
+  assert.ok(release);
+  release();
+  await slow;
+});
+
+test("individual seller endpoint rejects unknown providers", async () => {
+  const response = await request("/id/ABC-123/prices/other");
+  assert.equal(response.status, 400);
+});
+
 test("invalid route counts return 400 before searching", async (context) => {
   const search = context.mock.method(goatScraper, "getProductsAndInfo", async () => []);
   for (const count of ["0", "-1", "101", "1.5", "two", "", "1e2", "9007199254740992"]) {

@@ -3,7 +3,7 @@ import flightClubScraper from "../scrapers/flightclub-scraper.js";
 import goatScraper from "../scrapers/goat-scraper.js";
 import stadiumGoodsScraper from "../scrapers/stadiumgoods-scraper.js";
 import { normalizeStyleID } from "../scrapers/goat-catalog.js";
-import Sneaker, { type ProviderError, type SneakerDocument } from "../models/Sneaker.js";
+import Sneaker, { type ProviderError, type Retailer, type SneakerDocument } from "../models/Sneaker.js";
 import { RequestCache } from "./request-cache.js";
 
 export type SneaksCallback<T> = (error: Error | null, result: T | null) => void;
@@ -70,6 +70,7 @@ async function enrich(shoe: SneakerDocument, operations: Enrichment[]): Promise<
 class SneaksAPI {
   private readonly catalogCache: RequestCache<SneakerDocument[]>;
   private readonly priceCache: RequestCache<SneakerDocument>;
+  private readonly sellerPriceCache: RequestCache<SneakerDocument>;
 
   constructor(options: SneaksAPIOptions = {}) {
     const cache = options.cache ?? {};
@@ -91,6 +92,13 @@ class SneaksAPI {
       isCacheable: (shoe) => shoe.providerErrors.length === 0,
       now: cache.now,
     });
+    this.sellerPriceCache = new RequestCache({
+      enabled, maxEntries,
+      ttlMs: numericSetting(cache.priceTtlMs ?? process.env.SNEAKS_PRICE_CACHE_TTL_MS, 30_000, 0),
+      clone: cloneSneaker,
+      isCacheable: (shoe) => shoe.providerErrors.length === 0,
+      now: cache.now,
+    });
   }
 
   getProducts(keyword: string, count?: number): Promise<SneakerDocument[]>;
@@ -107,6 +115,30 @@ class SneaksAPI {
   getCatalogProducts(keyword: string, count = 40): Promise<SneakerDocument[]> {
     return this.catalogCache.get(JSON.stringify(["catalog-only", keyword, count]),
       () => goatScraper.getProductsAndInfo(keyword, count));
+  }
+
+  getSellerPrices(styleID: string, provider: Retailer): Promise<SneakerDocument> {
+    const normalizedStyleID = normalizeStyleID(styleID);
+    return this.sellerPriceCache.get(JSON.stringify([normalizedStyleID, provider]), async () => {
+      const products = await this.getCatalogProducts(normalizedStyleID, 1);
+      const match = products[0];
+      if (!match || normalizeStyleID(match.styleID) !== normalizedStyleID) throw new ProductNotFoundError();
+      // Each provider gets its own document so concurrent requests cannot mutate
+      // the shared catalog snapshot or leak another seller's partial response.
+      const shoe = cloneSneaker(match);
+      if (provider === "flightClub") {
+        await enrich(shoe, [{ provider, operation: "links", run: () => flightClubScraper.getLink(shoe) }]);
+        await enrich(shoe, [{ provider, operation: "prices", run: () => flightClubScraper.getPrices(shoe) }]);
+      } else if (provider === "stadiumGoods") {
+        // The exact-match discovery also retrieves the product's current prices.
+        await enrich(shoe, [{ provider, operation: "links", run: () => stadiumGoodsScraper.getLink(shoe) }]);
+      } else if (provider === "goat") {
+        await enrich(shoe, [{ provider, operation: "prices", run: () => goatScraper.getPrices(shoe) }]);
+      } else {
+        await enrich(shoe, [{ provider, operation: "prices", run: () => stockXScraper.getPrices(shoe) }]);
+      }
+      return shoe;
+    });
   }
 
   getProductPrices(styleID: string): Promise<SneakerDocument>;

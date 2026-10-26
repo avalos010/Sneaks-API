@@ -60,8 +60,11 @@ Importing the library does not start an HTTP server.
 | GET | `/popular` | Products in the GOAT catalog's default ranking |
 | GET | `/search/:shoe` | Products matching a URL-encoded keyword |
 | GET | `/id/:id/prices` | An exact style-ID match with available retailer prices and images |
+| GET | `/id/:id/prices/:provider` | An exact style-ID match with one retailer's prices (`goat`, `flightClub`, `stadiumGoods`, or `stockX`) |
 
 Popular and search requests accept `count`, which defaults to **40** and must be an integer from **1 to 100**. Results can contain fewer products when fewer valid matches are available. Style IDs with supplier spaces are normalized to hyphens.
+
+Use `/search/:shoe?catalog=true` for fast catalog results, then request individual sellers for visible products. Each seller response completes independently, so a slow storefront does not delay other prices.
 
 The local server also accepts the Netlify function prefix:
 
