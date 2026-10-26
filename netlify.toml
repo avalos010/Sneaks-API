@@ -10,6 +10,9 @@
   node_bundler = "esbuild"
   external_node_modules = ["@sparticuz/chromium-min", "playwright-core"]
 
+[functions."refresh-prices"]
+  schedule = "@hourly"
+
 [dev]
   command = "npm run dev"
   targetPort = 4000

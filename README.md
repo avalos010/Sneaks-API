@@ -172,9 +172,15 @@ Netlify Functions use the small `@sparticuz/chromium-min` package and download i
 
 ### Caching
 
-Each API instance caches successful searches and popular results for **60 seconds**, and complete price results for **30 seconds**. Concurrent requests for the same lookup share one scrape. Cached documents are copied before returning them so caller changes cannot alter later responses. Results with provider errors and rejected lookups are not stored.
+Each completed search, popular, or price request starts a new scrape. Simultaneous requests for the same lookup can share an in-flight scrape, but completed responses are not cached. A price lookup fetches current catalog details and retailer quotes before responding.
 
-The cache holds at most **100 entries each** for catalog and price results. It lives in memory: restarting the process clears it, and separate workers or serverless instances keep separate caches. The first uncached request still waits for the storefronts. Disable caching with `SNEAKS_CACHE_ENABLED=false`, or change the expiry settings below.
+Up to **100 distinct in-flight lookups** are shared per category. Separate workers or serverless instances track requests independently. Requests wait for the storefronts. Disable request sharing with `SNEAKS_CACHE_ENABLED=false`, or change the settings below.
+
+### Persistent price snapshots
+
+Set `NEON_DATABASE_URL` to enable shared Neon storage. The API stores the sneaker details and latest retailer price maps returned by `/id/:id/prices`, but each price request scrapes the stores and never serves a saved snapshot. `priceDataUpdatedAt` reports when the prices were fetched. A completed scrape replaces the whole snapshot, including empty maps for providers that failed, so old provider prices are not retained. If the product refresh fails completely, older snapshots for that style are deleted. Without `NEON_DATABASE_URL`, the API continues without persistent storage.
+
+Netlify runs `refresh-prices` once an hour. Each run refreshes up to one style ID whose stored snapshot is at least an hour old and was requested in the last 30 days, then removes records inactive for 30 days. Set `SNEAKS_REFRESH_BATCH_SIZE` to `2` or `3` to refresh more per run; scheduled functions have a **30-second limit**, so increase this only if the run consistently finishes within that limit. If more products are active than the job can refresh, some stored snapshots can be older than an hour, but the API always performs a new scrape. Netlify schedules run on published deploys only.
 
 ## Configuration
 
@@ -188,9 +194,12 @@ Server settings can come from environment variables or a local `.env` file. Pass
 | `STOCKX_BROWSER_MODE` | `headless`, `background`, or `visible` | `headless` |
 | `CHROMIUM_PACK_URL` | HTTPS URL for the Chromium pack used by Netlify Functions | Matching x64/arm64 GitHub release |
 | `SNEAKS_CACHE_ENABLED` | Set to `false`, `0`, or `off` to disable caching | Enabled |
-| `SNEAKS_SEARCH_CACHE_TTL_MS` | Search and popular result lifetime; `0` disables | `60000` |
-| `SNEAKS_PRICE_CACHE_TTL_MS` | Complete price result lifetime; `0` disables | `30000` |
-| `SNEAKS_CACHE_MAX_ENTRIES` | Maximum entries in each cache | `100` |
+| `SNEAKS_SEARCH_CACHE_TTL_MS` | Legacy setting; `0` disables concurrent search request sharing | `60000` |
+| `SNEAKS_PRICE_CACHE_TTL_MS` | Legacy setting; `0` disables concurrent price request sharing | `30000` |
+| `SNEAKS_CACHE_MAX_ENTRIES` | Maximum distinct in-flight lookups shared per category | `100` |
+| `NEON_DATABASE_URL` | Neon Postgres connection string for persistent price snapshots | Unset (database disabled) |
+| `SNEAKS_PRICE_SNAPSHOT_TTL_MS` | Age at which a stored snapshot becomes eligible for scheduled refresh | `3600000` (1 hour) |
+| `SNEAKS_REFRESH_BATCH_SIZE` | Maximum expired price snapshots refreshed by each hourly Netlify run (`1`–`3`) | `1` |
 | `API_BASE_URL` | Running server used by live tests | `http://localhost:4000` |
 | `REQUIRE_STOCKX` | Set to `1` to require StockX size prices in live tests | StockX prices are optional in the default live suite |
 

@@ -98,7 +98,7 @@ test("rejected loads retry and incomplete results are not retained", async () =>
   assert.equal(calls, 3);
 });
 
-test("controller caches distinguish search, count, and popular while isolating Mongoose snapshots", async (context) => {
+test("controller fetches search and popular results again after each completed request", async (context) => {
   mockEnrichment(context);
   const search = context.mock.method(goat, "getProductsAndInfo", async () => [new Sneaker({
     styleID: "ABC-123", shoeName: "Original", resellPrices: { goat: { "9": 100 } },
@@ -118,10 +118,10 @@ test("controller caches distinguish search, count, and popular while isolating M
   await api.getMostPopular(1);
   await api.getProducts("", 1);
   await api.getMostPopular(1);
-  assert.equal(search.mock.callCount(), 4);
+  assert.equal(search.mock.callCount(), 6);
 });
 
-test("controller deduplicates normalized price requests, expires prices, and preserves the catalog snapshot", async (context) => {
+test("controller shares concurrent price requests, scrapes again afterward, and preserves the catalog snapshot", async (context) => {
   mockEnrichment(context);
   let now = 0;
   const started = deferred<void>();
@@ -146,13 +146,13 @@ test("controller deduplicates normalized price requests, expires prices, and pre
   originalPrices["9"] = 999;
   assert.equal(follower.resellPrices.stockX?.["9"], 125);
   assert.equal((await api.getProductPrices("abc-123")).resellPrices.stockX?.["9"], 125);
-  assert.equal(prices.mock.callCount(), 1);
+  assert.equal(prices.mock.callCount(), 2);
   const [catalog] = await api.getProducts("ABC-123", 1);
   assert.deepEqual(catalog?.resellPrices.stockX, {});
   now = 10;
   await api.getProductPrices("ABC-123");
-  assert.equal(prices.mock.callCount(), 2);
-  assert.equal(search.mock.callCount(), 1);
+  assert.equal(prices.mock.callCount(), 3);
+  assert.equal(search.mock.callCount(), 4);
 });
 
 test("partial price responses retry providers without polluting cached catalog data", async (context) => {
@@ -168,11 +168,11 @@ test("partial price responses retry providers without polluting cached catalog d
   unavailable = false;
   assert.equal((await api.getProductPrices("ABC-123")).providerErrors.length, 0);
   await api.getProductPrices("ABC-123");
-  assert.equal(prices.mock.callCount(), 2);
-  assert.equal(search.mock.callCount(), 1);
+  assert.equal(prices.mock.callCount(), 3);
+  assert.equal(search.mock.callCount(), 3);
 });
 
-test("partial search responses retry enrichment rather than serving cached failures", async (context) => {
+test("search responses retry enrichment on every completed request", async (context) => {
   mockEnrichment(context);
   const search = context.mock.method(goat, "getProductsAndInfo", async () => [new Sneaker({ styleID: "ABC-123" })]);
   let unavailable = true;
@@ -184,7 +184,7 @@ test("partial search responses retry enrichment rather than serving cached failu
   unavailable = false;
   assert.equal((await api.getProducts("Jordan", 1))[0]?.providerErrors.length, 0);
   await api.getProducts("Jordan", 1);
-  assert.equal(search.mock.callCount(), 2);
+  assert.equal(search.mock.callCount(), 3);
 });
 
 test("SNEAKS_CACHE_ENABLED=false disables completed caching and request sharing", async (context) => {

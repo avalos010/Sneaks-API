@@ -17,6 +17,8 @@ export interface SneakerData {
   styleID: string;
   retailPrice?: number;
   releaseDate?: string;
+  /** Time the current retailer price maps were fetched. */
+  priceDataUpdatedAt?: string;
   description?: string;
   imageLinks: string[];
   thumbnail?: string;
@@ -40,6 +42,7 @@ const SneakerSchema = new Schema<SneakerData>({
   styleID: { type: String, required: true },
   retailPrice: Number,
   releaseDate: String,
+  priceDataUpdatedAt: String,
   description: String,
   imageLinks: { type: [String], default: [] },
   thumbnail: String,
