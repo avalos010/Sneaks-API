@@ -148,11 +148,11 @@ test("controller deduplicates normalized price requests, expires prices, and pre
   assert.equal((await api.getProductPrices("abc-123")).resellPrices.stockX?.["9"], 125);
   assert.equal(prices.mock.callCount(), 1);
   const [catalog] = await api.getProducts("ABC-123", 1);
-  assert.deepEqual(catalog?.resellPrices.stockX, {});
+  assert.deepEqual(catalog?.resellPrices.stockX, { "9": 125 });
   now = 10;
   await api.getProductPrices("ABC-123");
-  assert.equal(prices.mock.callCount(), 2);
-  assert.equal(search.mock.callCount(), 1);
+  assert.equal(prices.mock.callCount(), 3);
+  assert.equal(search.mock.callCount(), 2);
 });
 
 test("partial price responses retry providers without polluting cached catalog data", async (context) => {

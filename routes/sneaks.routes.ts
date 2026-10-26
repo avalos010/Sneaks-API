@@ -45,7 +45,9 @@ export function createRoutes(sneaks = new SneaksAPI()): Router {
       return;
     }
     try {
-      response.json(await sneaks.getProducts(request.params.shoe, count));
+      response.json(request.query.catalog === "true"
+        ? await sneaks.getCatalogProducts(request.params.shoe, count)
+        : await sneaks.getProducts(request.params.shoe, count));
     } catch (error: unknown) {
       sendProviderError(response, error);
     }

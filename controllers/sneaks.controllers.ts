@@ -100,8 +100,13 @@ class SneaksAPI {
     count = 40,
     callback?: SneaksCallback<SneakerDocument[]>,
   ): Promise<SneakerDocument[] | void> {
-    const operation = this.catalogCache.get(JSON.stringify(["search", keyword, count]), () => this.findProducts(keyword, count));
+    const operation = this.catalogCache.get(JSON.stringify(["search", keyword, count]), () => this.findProducts(keyword, count, true));
     return callback ? withCallback(operation, callback) : operation;
+  }
+
+  getCatalogProducts(keyword: string, count = 40): Promise<SneakerDocument[]> {
+    return this.catalogCache.get(JSON.stringify(["catalog-only", keyword, count]),
+      () => goatScraper.getProductsAndInfo(keyword, count));
   }
 
   getProductPrices(styleID: string): Promise<SneakerDocument>;
@@ -125,7 +130,7 @@ class SneaksAPI {
     return callback ? withCallback(operation, callback) : operation;
   }
 
-  private async findProducts(keyword: string, count: number): Promise<SneakerDocument[]> {
+  private async findProducts(keyword: string, count: number, includePrices = false): Promise<SneakerDocument[]> {
     const products = await goatScraper.getProductsAndInfo(keyword, count);
     // Bound storefront traffic for the default forty-product response.
     for (let offset = 0; offset < products.length; offset += 5) {
@@ -134,6 +139,7 @@ class SneaksAPI {
           { provider: "flightClub", operation: "links", run: () => flightClubScraper.getLink(shoe) },
           { provider: "stadiumGoods", operation: "links", run: () => stadiumGoodsScraper.getLink(shoe) },
         ]);
+        if (includePrices) await this.enrichPrices(shoe);
       }));
     }
     return products;
@@ -141,20 +147,27 @@ class SneaksAPI {
 
   private async findProductPrices(styleID: string): Promise<SneakerDocument> {
     const normalizedStyleID = normalizeStyleID(styleID);
-    const products = await this.getProducts(normalizedStyleID, 1);
+    const products = await this.catalogCache.get(JSON.stringify(["catalog", normalizedStyleID, 1]),
+      () => this.findProducts(normalizedStyleID, 1));
     const shoe = products[0];
     if (!shoe || normalizeStyleID(shoe.styleID) !== normalizedStyleID) {
       throw new ProductNotFoundError();
     }
+    await Promise.all([
+      this.enrichPrices(shoe),
+      enrich(shoe, [{ provider: "goat", operation: "pictures", run: () => goatScraper.getPictures(shoe) }]),
+    ]);
+    return shoe;
+  }
+
+  private async enrichPrices(shoe: SneakerDocument): Promise<void> {
     const operations: Enrichment[] = [
       { provider: "stockX", operation: "prices", run: () => stockXScraper.getPrices(shoe) },
       { provider: "stadiumGoods", operation: "prices", run: () => stadiumGoodsScraper.getPrices(shoe) },
       { provider: "flightClub", operation: "prices", run: () => flightClubScraper.getPrices(shoe) },
       { provider: "goat", operation: "prices", run: () => goatScraper.getPrices(shoe) },
-      { provider: "goat", operation: "pictures", run: () => goatScraper.getPictures(shoe) },
     ];
     await enrich(shoe, operations);
-    return shoe;
   }
 }
 

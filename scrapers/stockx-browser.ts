@@ -19,6 +19,10 @@ interface Session {
 let session: Session | undefined;
 let startingSession: Promise<Session> | undefined;
 let queue: Promise<void> = Promise.resolve();
+// Separate headless pages can navigate independently. Keep a bounded number
+// of lanes so a large search does not serialize every retailer behind one page.
+const headlessLanes: Promise<void>[] = Array.from({ length: 6 }, () => Promise.resolve());
+let nextLane = 0;
 let idleTimer: NodeJS.Timeout | undefined;
 let shutdownHooksInstalled = false;
 let activeOperations = 0;
@@ -290,6 +294,14 @@ function runBrowserOperation<T>(run: () => Promise<T>): Promise<T> {
   };
   if (isNetlifyRuntime()) return execute();
 
+  if ((process.env.STOCKX_BROWSER_MODE ?? "headless") === "headless") {
+    const lane = nextLane++ % headlessLanes.length;
+    const previous = headlessLanes[lane] ?? Promise.resolve();
+    const operation = Promise.all([queue, previous]).then(execute);
+    headlessLanes[lane] = operation.then(() => {}, () => {});
+    return operation;
+  }
+
   const operation = queue.then(execute);
   queue = operation.then(() => {}, () => {});
   return operation;
@@ -422,7 +434,7 @@ const stockXBrowser = {
 
   close(): Promise<void> {
     cancelIdleClose();
-    const operation = queue.then(async () => {
+    const operation = Promise.all([queue, ...headlessLanes]).then(async () => {
       cancelIdleClose();
       while (activeOperations > 0) await delay(20);
       const current = session;

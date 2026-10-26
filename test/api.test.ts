@@ -57,6 +57,24 @@ test("optional link failures preserve products and other enrichment", async (con
   assert.equal(shoe.providerErrors[0]?.message, "Unavailable");
 });
 
+test("search returns prices from every provider and preserves partial results", async (context) => {
+  mockEnrichment(context);
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => [new Sneaker({ styleID: "ABC-123" })]);
+  for (const [provider, scraper] of [["goat", goatScraper], ["flightClub", flightClubScraper],
+    ["stadiumGoods", stadiumGoodsScraper], ["stockX", stockXScraper]] as const) {
+    context.mock.method(scraper, "getPrices", async (shoe: SneakerDocument) => {
+      if (provider === "stockX") throw new Error("Unavailable");
+      shoe.resellPrices[provider] = { "9": 125 };
+    });
+  }
+  const [shoe] = await new SneaksAPI().getProducts("nike", 1);
+  assert.ok(shoe);
+  for (const provider of ["goat", "flightClub", "stadiumGoods"] as const) {
+    assert.equal(shoe.resellPrices[provider]?.["9"], 125);
+  }
+  assert.equal(shoe.providerErrors.find((error) => error.provider === "stockX")?.operation, "prices");
+});
+
 test("prices and pictures work without StockX developer credentials", async (context) => {
   mockEnrichment(context);
   const shoe = new Sneaker({ styleID: "ABC-123" });
@@ -184,6 +202,16 @@ test("serverless search and popular routes apply default and explicit counts", a
   response = await request("/.netlify/functions/api/popular", { count: "100" });
   assert.equal(response.status, 200);
   assert.deepEqual(search.mock.calls[1]?.arguments, ["", 100]);
+});
+
+test("catalog-only search returns promptly without price enrichment", async (context) => {
+  const shoe = new Sneaker({ styleID: "CATALOG-123" });
+  context.mock.method(goatScraper, "getProductsAndInfo", async () => [shoe]);
+  const prices = context.mock.method(stockXScraper, "getPrices", async () => {});
+  const response = await request("/search/catalog-test", { catalog: "true", count: "1" });
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(response.body)[0].styleID, "CATALOG-123");
+  assert.equal(prices.mock.callCount(), 0);
 });
 
 test("invalid route counts return 400 before searching", async (context) => {

@@ -147,7 +147,7 @@ main().catch(console.error);
 
 Products can include a name, brand, style ID, colorway, retail price, release date, description, thumbnail, images, retailer links, lowest prices, and size-to-price maps. Prices are returned in **USD** when the source provides USD offers. Missing prices are not represented as zero.
 
-GOAT and Flight Club prices match the US storefront's **new, no defects, good original box** options, with standard shipping speed. Their search indexes supply product metadata and links, not current price quotes. Use `/id/:id/prices` for size prices. Sizes use each product's native US sizing (for example, US women's sizes for a women's product). Prices are listing amounts; shipping, taxes, and separately displayed marketplace fees can increase the checkout total. StockX, for example, displays its marketplace fee separately from the Buy Now amount.
+GOAT and Flight Club prices match the US storefront's **new, no defects, good original box** options, with standard shipping speed. Search results and `/id/:id/prices` fetch available size prices from each provider; popular results provide catalog data and links. Sizes use each product's native US sizing (for example, US women's sizes for a women's product). Prices are listing amounts; shipping, taxes, and separately displayed marketplace fees can increase the checkout total. StockX, for example, displays its marketplace fee separately from the Buy Now amount.
 
 | Provider | Current source | Browser required? |
 | --- | --- | --- |
@@ -164,7 +164,7 @@ Public storefronts can change their markup, inventory, or access rules. Passing 
 
 ### Storefronts and Chrome
 
-StockX, GOAT prices, and Flight Club prices first attempt ordinary HTTP, then render the public page in Chrome if access is blocked or product data is incomplete. The fallback uses its own temporary profile, never your personal Chrome profile, and does not require a retailer login. Requests share that session briefly; it closes after **30 seconds** without requests. Catalog searches and Stadium Goods use HTTP without launching Chrome.
+StockX, GOAT prices, and Flight Club prices first attempt ordinary HTTP, then render the public page in Chrome if access is blocked or product data is incomplete. The fallback uses its own temporary profile, never your personal Chrome profile, and does not require a retailer login. Headless requests share that session and use up to six concurrent browser pages; it closes after **30 seconds** without requests. Catalog searches and Stadium Goods use HTTP without launching Chrome. Search requests fetch prices for every requested result, so use a smaller `count` for a faster first response.
 
 The default `headless` mode opens no browser windows. It reads Chrome's actual version and uses a standard Chrome user agent; this lets the public stores return prices without opening a desktop window. Set `STOCKX_BROWSER_MODE=background` to create minimized windows, or use `visible` when debugging. Linux servers running native Chrome can use Xvfb for either desktop mode. Cloud hosts may still be blocked by a retailer's network rules: the Netlify test for FY2903 returned GOAT and Stadium Goods prices, while Flight Club and StockX returned HTTP 403. Check `providerErrors` when those sources are unavailable.
 
