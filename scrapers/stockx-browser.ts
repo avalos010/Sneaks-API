@@ -26,7 +26,7 @@ let activeOperations = 0;
 const bundledChromiumVersion = "v153.0.0";
 
 function browserMode(): BrowserMode {
-  const mode = process.env.STOCKX_BROWSER_MODE ?? "background";
+  const mode = process.env.STOCKX_BROWSER_MODE ?? "headless";
   if (mode === "background" || mode === "headless" || mode === "visible") return mode;
   throw new Error("STOCKX_BROWSER_MODE must be background, headless, or visible");
 }
