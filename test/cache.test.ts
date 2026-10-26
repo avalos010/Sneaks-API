@@ -7,6 +7,7 @@ import goat from "../scrapers/goat-scraper.js";
 import flightClub from "../scrapers/flightclub-scraper.js";
 import stadiumGoods from "../scrapers/stadiumgoods-scraper.js";
 import stockX from "../scrapers/stockx-scraper.js";
+import klekt from "../scrapers/klekt-scraper.js";
 
 function deferred<T>() {
   let settle: ((value: T) => void) | undefined;
@@ -26,6 +27,7 @@ function mockEnrichment(context: TestContext): void {
     context.mock.method(scraper, "getPrices", async () => {});
   }
   context.mock.method(stockX, "getPrices", async () => {});
+  context.mock.method(klekt, "getPrices", async () => {});
   context.mock.method(goat, "getPrices", async () => {});
   context.mock.method(goat, "getPictures", async () => {});
 }

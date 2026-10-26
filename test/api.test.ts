@@ -6,6 +6,7 @@ import stockXScraper from "../scrapers/stockx-scraper.js";
 import flightClubScraper from "../scrapers/flightclub-scraper.js";
 import stadiumGoodsScraper from "../scrapers/stadiumgoods-scraper.js";
 import goatScraper from "../scrapers/goat-scraper.js";
+import klektScraper from "../scrapers/klekt-scraper.js";
 import { handler } from "../index.js";
 
 function mockEnrichment(context: TestContext): void {
@@ -14,6 +15,7 @@ function mockEnrichment(context: TestContext): void {
     context.mock.method(scraper, "getPrices", async () => {});
   }
   context.mock.method(stockXScraper, "getPrices", async () => {});
+  context.mock.method(klektScraper, "getPrices", async () => {});
   context.mock.method(goatScraper, "getPictures", async () => {});
 }
 

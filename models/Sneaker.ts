@@ -1,7 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import type { HydratedDocument, Model } from "mongoose";
 
-export type Retailer = "stockX" | "stadiumGoods" | "goat" | "flightClub";
+export type Retailer = "stockX" | "stadiumGoods" | "goat" | "flightClub" | "klekt";
 export type PriceMap = Record<string, number>;
 export interface ProviderError {
   provider: Retailer;
@@ -52,6 +52,7 @@ const SneakerSchema = new Schema<SneakerData>({
     stadiumGoods: String,
     goat: String,
     flightClub: String,
+    klekt: String,
   },
   size: Number,
   lowestResellPrice: {
@@ -59,12 +60,14 @@ const SneakerSchema = new Schema<SneakerData>({
     stadiumGoods: Number,
     goat: Number,
     flightClub: Number,
+    klekt: Number,
   },
   resellPrices: {
     stockX: { type: Object, default: {} },
     goat: { type: Object, default: {} },
     stadiumGoods: { type: Object, default: {} },
     flightClub: { type: Object, default: {} },
+    klekt: { type: Object, default: {} },
   },
   providerErrors: {
     type: [new Schema<ProviderError>({

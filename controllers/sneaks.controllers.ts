@@ -2,6 +2,7 @@ import stockXScraper from "../scrapers/stockx-scraper.js";
 import flightClubScraper from "../scrapers/flightclub-scraper.js";
 import goatScraper from "../scrapers/goat-scraper.js";
 import stadiumGoodsScraper from "../scrapers/stadiumgoods-scraper.js";
+import klektScraper from "../scrapers/klekt-scraper.js";
 import { normalizeStyleID } from "../scrapers/goat-catalog.js";
 import Sneaker, { type ProviderError, type Retailer, type SneakerDocument } from "../models/Sneaker.js";
 import { RequestCache } from "./request-cache.js";
@@ -134,6 +135,8 @@ class SneaksAPI {
         await enrich(shoe, [{ provider, operation: "links", run: () => stadiumGoodsScraper.getLink(shoe) }]);
       } else if (provider === "goat") {
         await enrich(shoe, [{ provider, operation: "prices", run: () => goatScraper.getPrices(shoe) }]);
+      } else if (provider === "klekt") {
+        await enrich(shoe, [{ provider, operation: "prices", run: () => klektScraper.getPrices(shoe) }]);
       } else {
         await enrich(shoe, [{ provider, operation: "prices", run: () => stockXScraper.getPrices(shoe) }]);
       }
@@ -198,6 +201,7 @@ class SneaksAPI {
       { provider: "stadiumGoods", operation: "prices", run: () => stadiumGoodsScraper.getPrices(shoe) },
       { provider: "flightClub", operation: "prices", run: () => flightClubScraper.getPrices(shoe) },
       { provider: "goat", operation: "prices", run: () => goatScraper.getPrices(shoe) },
+      { provider: "klekt", operation: "prices", run: () => klektScraper.getPrices(shoe) },
     ];
     await enrich(shoe, operations);
   }

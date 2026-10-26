@@ -64,7 +64,7 @@ export function createRoutes(sneaks = new SneaksAPI()): Router {
 
   router.get("/id/:id/prices/:provider", async (request, response) => {
     const provider = request.params.provider;
-    if (!["goat", "flightClub", "stadiumGoods", "stockX"].includes(provider)) {
+    if (!["goat", "flightClub", "stadiumGoods", "stockX", "klekt"].includes(provider)) {
       response.status(400).json({ error: "Unknown provider" });
       return;
     }

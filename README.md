@@ -8,7 +8,7 @@
 ![Node.js 22.12+](https://img.shields.io/badge/node-%3E%3D22.12-green)
 ![Strict TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
 
-Search sneakers and compare available size prices from **GOAT, Flight Club, Stadium Goods, and StockX**. Run it as a local HTTP API, import the library, or deploy the HTTP integrations with Netlify.
+Search sneakers and compare available size prices from **GOAT, Flight Club, Stadium Goods, StockX, and KLEKT**. Run it as a local HTTP API, import the library, or deploy the HTTP integrations with Netlify.
 
 This fork uses strict TypeScript and native ES modules, preserves the callback API, and adds Promise-based methods. It reads public storefront data without requiring developer accounts or private API keys. Price lookups can render pages in a separate Chrome session when ordinary HTTP requests are blocked.
 
@@ -60,7 +60,7 @@ Importing the library does not start an HTTP server.
 | GET | `/popular` | Products in the GOAT catalog's default ranking |
 | GET | `/search/:shoe` | Products matching a URL-encoded keyword |
 | GET | `/id/:id/prices` | An exact style-ID match with available retailer prices and images |
-| GET | `/id/:id/prices/:provider` | An exact style-ID match with one retailer's prices (`goat`, `flightClub`, `stadiumGoods`, or `stockX`) |
+| GET | `/id/:id/prices/:provider` | An exact style-ID match with one retailer's prices (`goat`, `flightClub`, `stadiumGoods`, `stockX`, or `klekt`) |
 
 Popular and search requests accept `count`, which defaults to **40** and must be an integer from **1 to 100**. Results can contain fewer products when fewer valid matches are available. Style IDs with supplier spaces are normalized to hyphens.
 
@@ -158,8 +158,11 @@ GOAT and Flight Club prices match the US storefront's **new, no defects, good or
 | Flight Club | Public catalog for discovery; product page's regional size offers for prices | Sometimes; Chrome fallback for prices |
 | Stadium Goods | Shopify `/search/suggest.json` and `/products/{handle}.js` | No |
 | StockX | Public search/product pages, visible style details, and embedded Product JSON-LD offers | Sometimes; Chrome fallback |
+| KLEKT | Public listing search and individual listing pages | No |
 
 GOAT and Flight Club discovery uses `POST https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries` (indexes `product_variants_v2` and `product_variants_v2_flight_club`). GOAT prices use the public storefront's `/web-api/v1/product_variants/buy_bar_data` response with `countryCode=US`. Flight Club prices come from its public product page. Stadium Goods uses `https://www.stadiumgoods.com`; StockX uses `https://stockx.com`.
+
+KLEKT checks up to the first 12 search listings individually, accepting only exact style matches in new condition with an original box, US size, and an in-stock USD offer. These are the lowest verified prices among those listings, not necessarily the lowest across the entire marketplace.
 
 Search and popular products depend on the GOAT catalog. Other provider enrichments are optional: if one fails, successful data remains available and `providerErrors` records its `provider`, `operation`, and `message`. A retailer with no matching product or no available inventory can have an empty price map without an error.
 
